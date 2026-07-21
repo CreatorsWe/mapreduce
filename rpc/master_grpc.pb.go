@@ -20,13 +20,15 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	MasterService_WorkerRegister_FullMethodName = "/master.MasterService/WorkerRegister"
+	MasterService_Heartbeat_FullMethodName      = "/master.MasterService/Heartbeat"
 )
 
 // MasterServiceClient is the client API for MasterService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MasterServiceClient interface {
-	WorkerRegister(ctx context.Context, in *WorkerRegisterRequest, opts ...grpc.CallOption) (*WorkerRegisterResponse, error)
+	WorkerRegister(ctx context.Context, in *WorkerRegisterRequest, opts ...grpc.CallOption) (*WorkerRegisterReply, error)
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatReply, error)
 }
 
 type masterServiceClient struct {
@@ -37,10 +39,20 @@ func NewMasterServiceClient(cc grpc.ClientConnInterface) MasterServiceClient {
 	return &masterServiceClient{cc}
 }
 
-func (c *masterServiceClient) WorkerRegister(ctx context.Context, in *WorkerRegisterRequest, opts ...grpc.CallOption) (*WorkerRegisterResponse, error) {
+func (c *masterServiceClient) WorkerRegister(ctx context.Context, in *WorkerRegisterRequest, opts ...grpc.CallOption) (*WorkerRegisterReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WorkerRegisterResponse)
+	out := new(WorkerRegisterReply)
 	err := c.cc.Invoke(ctx, MasterService_WorkerRegister_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatReply)
+	err := c.cc.Invoke(ctx, MasterService_Heartbeat_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +63,8 @@ func (c *masterServiceClient) WorkerRegister(ctx context.Context, in *WorkerRegi
 // All implementations must embed UnimplementedMasterServiceServer
 // for forward compatibility.
 type MasterServiceServer interface {
-	WorkerRegister(context.Context, *WorkerRegisterRequest) (*WorkerRegisterResponse, error)
+	WorkerRegister(context.Context, *WorkerRegisterRequest) (*WorkerRegisterReply, error)
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatReply, error)
 	mustEmbedUnimplementedMasterServiceServer()
 }
 
@@ -62,8 +75,11 @@ type MasterServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMasterServiceServer struct{}
 
-func (UnimplementedMasterServiceServer) WorkerRegister(context.Context, *WorkerRegisterRequest) (*WorkerRegisterResponse, error) {
+func (UnimplementedMasterServiceServer) WorkerRegister(context.Context, *WorkerRegisterRequest) (*WorkerRegisterReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method WorkerRegister not implemented")
+}
+func (UnimplementedMasterServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
 }
 func (UnimplementedMasterServiceServer) mustEmbedUnimplementedMasterServiceServer() {}
 func (UnimplementedMasterServiceServer) testEmbeddedByValue()                       {}
@@ -104,6 +120,24 @@ func _MasterService_WorkerRegister_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MasterService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServiceServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MasterService_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MasterService_ServiceDesc is the grpc.ServiceDesc for MasterService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var MasterService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WorkerRegister",
 			Handler:    _MasterService_WorkerRegister_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _MasterService_Heartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

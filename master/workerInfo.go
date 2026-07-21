@@ -9,6 +9,7 @@ import (
 type WorkerInfo struct {
 	// 标识&地址
 	WorkerID string
+
 	Address  string // ip:port
 
 	// 状态&存活

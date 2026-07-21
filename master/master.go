@@ -6,6 +6,8 @@ import (
 	"math"
 	"net"
 	"sync"
+	"time"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/mapreduce_impl/common"
@@ -83,7 +85,11 @@ func (master *Master) StartService() {
 
 }
 
-func (master *Master) WorkerRegister(tx context.Context, req *pb.WorkerRegisterRequest) (*pb.WorkerRegisterResponse, error) {
+// service MasterService {
+//   rpc WorkerRegister(WorkerRegisterRequest) returns (WorkerRegisterReply);
+//   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatReply);
+// }
+func (master *Master) WorkerRegister(tx context.Context, req *pb.WorkerRegisterRequest) (*pb.WorkerRegisterReply, error) {
 	WorkerInfo := NewWorkerInfo(req.Uuid, req.Address)
 	master.WorkerMut.Lock()
 
@@ -94,13 +100,30 @@ func (master *Master) WorkerRegister(tx context.Context, req *pb.WorkerRegisterR
 
 	log.Printf("[Worker Register] Worker %s registered in %s.", req.Uuid, req.Address)
 
-	return &pb.WorkerRegisterResponse{
+	return &pb.WorkerRegisterReply{
 		Ok:       true,
 		MasterId: master.UUID,
-		NReduce:  int32(master.NReduce), // why does worker need NReduce?
 	}, nil
 }
 
+func (master *Master) Heartbeat(tx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatReply, error) {
+	// 1. 根据 id 找到 workers
+	var worker *WorkerInfo
+	for _, w := range master.Workers {
+		if w.WorkerID == req.Uuid {
+			worker = &w
+			break
+		}
+	}
+
+	// 2. 更新 LastTime
+	worker.LastPing = time.Now()
+
+	// 3. 如果申请任务，返回任务并更新 map 信息（不应该这么草率，希望后面改进）
+	if req.RequestTask {
+		master.UpdateMasterOnTaskComplete(worker.WorkerID, int(req.CurrentTask), req.CurrentTaskType)	
+	} 
+}
 
 func (master *Master) TaskInitialization(_jobInput common.BigFile, _blockSize int, _intermediateDir, _outputDir string) {
 	// compute M which the number of map task
@@ -123,3 +146,51 @@ func (master *Master) TaskInitialization(_jobInput common.BigFile, _blockSize in
 	}
 }
 
+// 当一个 task 完成时，需要更新： 1. 执行它的 worker 信息； 2. 更新这个 task 的信息；
+func (master *Master) UpdateMasterOnTaskComplete(workerID string, taskID int, taskType string) error {
+	// 1. 判断 taskID 是否是这个 worker 正在执行的 task	
+	var workerInfo *WorkerInfo = nil
+	var taskInfo any
+	for _, w := range master.Workers {
+		if w.WorkerID == workerID {
+			workerInfo = &w
+			break
+		}
+	}
+
+	switch taskType {
+	case "map":
+		for _, t := range master.MapTasks {
+			if t.ID == taskID {
+				taskInfo = &t
+				break
+			}
+		}
+	case "reduce":
+		for _, t := range master.ReduceTasks {
+			if t.ID == taskID {
+				taskInfo = &t
+				break
+			}
+		}
+	}
+
+	if workerInfo == nil || taskInfo == nil {
+		return fmt.Errorf("[Update Master]Do not find worker %s from master's workers", workerID)
+	}
+
+	// 2. 更新 workers
+	workerInfo.Status = common.WorkerStatusIdle
+	workerInfo.CompletedTasks = append(workerInfo.CompletedTasks, taskID)
+	
+	// 3. 更新 tasks
+	switch t := taskInfo.(type) {
+	case MapTaskInfo:
+		t.Status = common.TaskStatusCompleted
+		t.EndTime = time.Now()
+	case ReduceTaskInfo: 
+		t.Status = common.TaskStatusCompleted
+		t.EndTime = time.Now()	
+	}	
+	return nil
+}

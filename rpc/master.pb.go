@@ -21,6 +21,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type Status int32
+
+const (
+	Status_Idle      Status = 0
+	Status_Running   Status = 1
+	Status_Completed Status = 2
+	Status_Fatal     Status = 3
+)
+
+// Enum value maps for Status.
+var (
+	Status_name = map[int32]string{
+		0: "Idle",
+		1: "Running",
+		2: "Completed",
+		3: "Fatal",
+	}
+	Status_value = map[string]int32{
+		"Idle":      0,
+		"Running":   1,
+		"Completed": 2,
+		"Fatal":     3,
+	}
+)
+
+func (x Status) Enum() *Status {
+	p := new(Status)
+	*p = x
+	return p
+}
+
+func (x Status) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Status) Descriptor() protoreflect.EnumDescriptor {
+	return file_rpc_master_proto_enumTypes[0].Descriptor()
+}
+
+func (Status) Type() protoreflect.EnumType {
+	return &file_rpc_master_proto_enumTypes[0]
+}
+
+func (x Status) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Status.Descriptor instead.
+func (Status) EnumDescriptor() ([]byte, []int) {
+	return file_rpc_master_proto_rawDescGZIP(), []int{0}
+}
+
 // worker 向 master 发送自己的标识信息和地址
 type WorkerRegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -75,29 +127,28 @@ func (x *WorkerRegisterRequest) GetAddress() string {
 }
 
 // Map 阶段需要 NReduce 计算分区：partition = hash(key) % nReduce。相同的 key 进入相同的 分区
-type WorkerRegisterResponse struct {
+type WorkerRegisterReply struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	MasterId      string                 `protobuf:"bytes,2,opt,name=master_id,json=masterId,proto3" json:"master_id,omitempty"`
-	NReduce       int32                  `protobuf:"varint,3,opt,name=n_reduce,json=nReduce,proto3" json:"n_reduce,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WorkerRegisterResponse) Reset() {
-	*x = WorkerRegisterResponse{}
+func (x *WorkerRegisterReply) Reset() {
+	*x = WorkerRegisterReply{}
 	mi := &file_rpc_master_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WorkerRegisterResponse) String() string {
+func (x *WorkerRegisterReply) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WorkerRegisterResponse) ProtoMessage() {}
+func (*WorkerRegisterReply) ProtoMessage() {}
 
-func (x *WorkerRegisterResponse) ProtoReflect() protoreflect.Message {
+func (x *WorkerRegisterReply) ProtoReflect() protoreflect.Message {
 	mi := &file_rpc_master_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -109,30 +160,362 @@ func (x *WorkerRegisterResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WorkerRegisterResponse.ProtoReflect.Descriptor instead.
-func (*WorkerRegisterResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use WorkerRegisterReply.ProtoReflect.Descriptor instead.
+func (*WorkerRegisterReply) Descriptor() ([]byte, []int) {
 	return file_rpc_master_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *WorkerRegisterResponse) GetOk() bool {
+func (x *WorkerRegisterReply) GetOk() bool {
 	if x != nil {
 		return x.Ok
 	}
 	return false
 }
 
-func (x *WorkerRegisterResponse) GetMasterId() string {
+func (x *WorkerRegisterReply) GetMasterId() string {
 	if x != nil {
 		return x.MasterId
 	}
 	return ""
 }
 
-func (x *WorkerRegisterResponse) GetNReduce() int32 {
+type HeartbeatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Uuid          string                 `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CurrentTask   int32                  `protobuf:"varint,2,opt,name=current_task,json=currentTask,proto3" json:"current_task,omitempty"` // 正在执行的 task id
+	RequestTask   bool                   `protobuf:"varint,3,opt,name=request_task,json=requestTask,proto3" json:"request_task,omitempty"` // 是否请求新任务
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatRequest) Reset() {
+	*x = HeartbeatRequest{}
+	mi := &file_rpc_master_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatRequest) ProtoMessage() {}
+
+func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rpc_master_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_rpc_master_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *HeartbeatRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *HeartbeatRequest) GetCurrentTask() int32 {
+	if x != nil {
+		return x.CurrentTask
+	}
+	return 0
+}
+
+func (x *HeartbeatRequest) GetRequestTask() bool {
+	if x != nil {
+		return x.RequestTask
+	}
+	return false
+}
+
+type HeartbeatReply struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Ok    bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	// Types that are valid to be assigned to TaskInfo:
+	//
+	//	*HeartbeatReply_MapTaskInfo
+	//	*HeartbeatReply_ReduceTaskInfo
+	TaskInfo      isHeartbeatReply_TaskInfo `protobuf_oneof:"TaskInfo"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatReply) Reset() {
+	*x = HeartbeatReply{}
+	mi := &file_rpc_master_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatReply) ProtoMessage() {}
+
+func (x *HeartbeatReply) ProtoReflect() protoreflect.Message {
+	mi := &file_rpc_master_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatReply.ProtoReflect.Descriptor instead.
+func (*HeartbeatReply) Descriptor() ([]byte, []int) {
+	return file_rpc_master_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *HeartbeatReply) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *HeartbeatReply) GetTaskInfo() isHeartbeatReply_TaskInfo {
+	if x != nil {
+		return x.TaskInfo
+	}
+	return nil
+}
+
+func (x *HeartbeatReply) GetMapTaskInfo() *MapTaskInfo {
+	if x != nil {
+		if x, ok := x.TaskInfo.(*HeartbeatReply_MapTaskInfo); ok {
+			return x.MapTaskInfo
+		}
+	}
+	return nil
+}
+
+func (x *HeartbeatReply) GetReduceTaskInfo() *ReduceTaskInfo {
+	if x != nil {
+		if x, ok := x.TaskInfo.(*HeartbeatReply_ReduceTaskInfo); ok {
+			return x.ReduceTaskInfo
+		}
+	}
+	return nil
+}
+
+type isHeartbeatReply_TaskInfo interface {
+	isHeartbeatReply_TaskInfo()
+}
+
+type HeartbeatReply_MapTaskInfo struct {
+	MapTaskInfo *MapTaskInfo `protobuf:"bytes,2,opt,name=map_task_info,json=mapTaskInfo,proto3,oneof"`
+}
+
+type HeartbeatReply_ReduceTaskInfo struct {
+	ReduceTaskInfo *ReduceTaskInfo `protobuf:"bytes,3,opt,name=reduce_task_info,json=reduceTaskInfo,proto3,oneof"`
+}
+
+func (*HeartbeatReply_MapTaskInfo) isHeartbeatReply_TaskInfo() {}
+
+func (*HeartbeatReply_ReduceTaskInfo) isHeartbeatReply_TaskInfo() {}
+
+type MapTaskInfo struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ID              int32                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	Status          Status                 `protobuf:"varint,2,opt,name=status,proto3,enum=master.Status" json:"status,omitempty"`
+	Datanode        string                 `protobuf:"bytes,3,opt,name=datanode,proto3" json:"datanode,omitempty"`
+	Block           int32                  `protobuf:"varint,4,opt,name=block,proto3" json:"block,omitempty"`
+	StartIndex      int32                  `protobuf:"varint,5,opt,name=start_index,json=startIndex,proto3" json:"start_index,omitempty"`
+	Size            int32                  `protobuf:"varint,6,opt,name=size,proto3" json:"size,omitempty"`
+	IntermediateDir string                 `protobuf:"bytes,7,opt,name=intermediate_dir,json=intermediateDir,proto3" json:"intermediate_dir,omitempty"`
+	NReduce         int32                  `protobuf:"varint,8,opt,name=n_reduce,json=nReduce,proto3" json:"n_reduce,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MapTaskInfo) Reset() {
+	*x = MapTaskInfo{}
+	mi := &file_rpc_master_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MapTaskInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MapTaskInfo) ProtoMessage() {}
+
+func (x *MapTaskInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_rpc_master_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MapTaskInfo.ProtoReflect.Descriptor instead.
+func (*MapTaskInfo) Descriptor() ([]byte, []int) {
+	return file_rpc_master_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *MapTaskInfo) GetID() int32 {
+	if x != nil {
+		return x.ID
+	}
+	return 0
+}
+
+func (x *MapTaskInfo) GetStatus() Status {
+	if x != nil {
+		return x.Status
+	}
+	return Status_Idle
+}
+
+func (x *MapTaskInfo) GetDatanode() string {
+	if x != nil {
+		return x.Datanode
+	}
+	return ""
+}
+
+func (x *MapTaskInfo) GetBlock() int32 {
+	if x != nil {
+		return x.Block
+	}
+	return 0
+}
+
+func (x *MapTaskInfo) GetStartIndex() int32 {
+	if x != nil {
+		return x.StartIndex
+	}
+	return 0
+}
+
+func (x *MapTaskInfo) GetSize() int32 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *MapTaskInfo) GetIntermediateDir() string {
+	if x != nil {
+		return x.IntermediateDir
+	}
+	return ""
+}
+
+func (x *MapTaskInfo) GetNReduce() int32 {
 	if x != nil {
 		return x.NReduce
 	}
 	return 0
+}
+
+//	type ReduceTaskInfo struct {
+//		ID int
+//
+//		// 任务状态
+//		Status common.TaskStatus
+//
+//		// 输入(文件地址 和 待处理的分区)
+//		ReduceIndex int
+//
+//		// 输出
+//		OutputDir string
+//
+//		// 执行 worker 编号
+//		WorkerID string
+//
+//		//开始时间和结束时间戳
+//		PullDataStartTime time.Time
+//		PullDataEndTime   time.Time
+//		ReduceStartTime   time.Time
+//		ReduceEndTime     time.Time
+//	}
+type ReduceTaskInfo struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ID             int32                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	Status         Status                 `protobuf:"varint,2,opt,name=status,proto3,enum=master.Status" json:"status,omitempty"`
+	PartitionIndex int32                  `protobuf:"varint,3,opt,name=partition_index,json=partitionIndex,proto3" json:"partition_index,omitempty"`
+	OutputDir      string                 `protobuf:"bytes,4,opt,name=output_dir,json=outputDir,proto3" json:"output_dir,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ReduceTaskInfo) Reset() {
+	*x = ReduceTaskInfo{}
+	mi := &file_rpc_master_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReduceTaskInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReduceTaskInfo) ProtoMessage() {}
+
+func (x *ReduceTaskInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_rpc_master_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReduceTaskInfo.ProtoReflect.Descriptor instead.
+func (*ReduceTaskInfo) Descriptor() ([]byte, []int) {
+	return file_rpc_master_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ReduceTaskInfo) GetID() int32 {
+	if x != nil {
+		return x.ID
+	}
+	return 0
+}
+
+func (x *ReduceTaskInfo) GetStatus() Status {
+	if x != nil {
+		return x.Status
+	}
+	return Status_Idle
+}
+
+func (x *ReduceTaskInfo) GetPartitionIndex() int32 {
+	if x != nil {
+		return x.PartitionIndex
+	}
+	return 0
+}
+
+func (x *ReduceTaskInfo) GetOutputDir() string {
+	if x != nil {
+		return x.OutputDir
+	}
+	return ""
 }
 
 var File_rpc_master_proto protoreflect.FileDescriptor
@@ -142,13 +525,44 @@ const file_rpc_master_proto_rawDesc = "" +
 	"\x10rpc/master.proto\x12\x06master\"E\n" +
 	"\x15WorkerRegisterRequest\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x18\n" +
-	"\aaddress\x18\x02 \x01(\tR\aaddress\"`\n" +
-	"\x16WorkerRegisterResponse\x12\x0e\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\"B\n" +
+	"\x13WorkerRegisterReply\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1b\n" +
-	"\tmaster_id\x18\x02 \x01(\tR\bmasterId\x12\x19\n" +
-	"\bn_reduce\x18\x03 \x01(\x05R\anReduce2`\n" +
-	"\rMasterService\x12O\n" +
-	"\x0eWorkerRegister\x12\x1d.master.WorkerRegisterRequest\x1a\x1e.master.WorkerRegisterResponseB\x1fZ\x1dgithub.com/mapreduce_impl/rpcb\x06proto3"
+	"\tmaster_id\x18\x02 \x01(\tR\bmasterId\"l\n" +
+	"\x10HeartbeatRequest\x12\x12\n" +
+	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12!\n" +
+	"\fcurrent_task\x18\x02 \x01(\x05R\vcurrentTask\x12!\n" +
+	"\frequest_task\x18\x03 \x01(\bR\vrequestTask\"\xab\x01\n" +
+	"\x0eHeartbeatReply\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x129\n" +
+	"\rmap_task_info\x18\x02 \x01(\v2\x13.master.MapTaskInfoH\x00R\vmapTaskInfo\x12B\n" +
+	"\x10reduce_task_info\x18\x03 \x01(\v2\x16.master.ReduceTaskInfoH\x00R\x0ereduceTaskInfoB\n" +
+	"\n" +
+	"\bTaskInfo\"\xf2\x01\n" +
+	"\vMapTaskInfo\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\x05R\x02ID\x12&\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x0e.master.StatusR\x06status\x12\x1a\n" +
+	"\bdatanode\x18\x03 \x01(\tR\bdatanode\x12\x14\n" +
+	"\x05block\x18\x04 \x01(\x05R\x05block\x12\x1f\n" +
+	"\vstart_index\x18\x05 \x01(\x05R\n" +
+	"startIndex\x12\x12\n" +
+	"\x04size\x18\x06 \x01(\x05R\x04size\x12)\n" +
+	"\x10intermediate_dir\x18\a \x01(\tR\x0fintermediateDir\x12\x19\n" +
+	"\bn_reduce\x18\b \x01(\x05R\anReduce\"\x90\x01\n" +
+	"\x0eReduceTaskInfo\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\x05R\x02ID\x12&\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x0e.master.StatusR\x06status\x12'\n" +
+	"\x0fpartition_index\x18\x03 \x01(\x05R\x0epartitionIndex\x12\x1d\n" +
+	"\n" +
+	"output_dir\x18\x04 \x01(\tR\toutputDir*9\n" +
+	"\x06Status\x12\b\n" +
+	"\x04Idle\x10\x00\x12\v\n" +
+	"\aRunning\x10\x01\x12\r\n" +
+	"\tCompleted\x10\x02\x12\t\n" +
+	"\x05Fatal\x10\x032\x9c\x01\n" +
+	"\rMasterService\x12L\n" +
+	"\x0eWorkerRegister\x12\x1d.master.WorkerRegisterRequest\x1a\x1b.master.WorkerRegisterReply\x12=\n" +
+	"\tHeartbeat\x12\x18.master.HeartbeatRequest\x1a\x16.master.HeartbeatReplyB\x1fZ\x1dgithub.com/mapreduce_impl/rpcb\x06proto3"
 
 var (
 	file_rpc_master_proto_rawDescOnce sync.Once
@@ -162,19 +576,31 @@ func file_rpc_master_proto_rawDescGZIP() []byte {
 	return file_rpc_master_proto_rawDescData
 }
 
-var file_rpc_master_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_rpc_master_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_rpc_master_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_rpc_master_proto_goTypes = []any{
-	(*WorkerRegisterRequest)(nil),  // 0: master.WorkerRegisterRequest
-	(*WorkerRegisterResponse)(nil), // 1: master.WorkerRegisterResponse
+	(Status)(0),                   // 0: master.Status
+	(*WorkerRegisterRequest)(nil), // 1: master.WorkerRegisterRequest
+	(*WorkerRegisterReply)(nil),   // 2: master.WorkerRegisterReply
+	(*HeartbeatRequest)(nil),      // 3: master.HeartbeatRequest
+	(*HeartbeatReply)(nil),        // 4: master.HeartbeatReply
+	(*MapTaskInfo)(nil),           // 5: master.MapTaskInfo
+	(*ReduceTaskInfo)(nil),        // 6: master.ReduceTaskInfo
 }
 var file_rpc_master_proto_depIdxs = []int32{
-	0, // 0: master.MasterService.WorkerRegister:input_type -> master.WorkerRegisterRequest
-	1, // 1: master.MasterService.WorkerRegister:output_type -> master.WorkerRegisterResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	5, // 0: master.HeartbeatReply.map_task_info:type_name -> master.MapTaskInfo
+	6, // 1: master.HeartbeatReply.reduce_task_info:type_name -> master.ReduceTaskInfo
+	0, // 2: master.MapTaskInfo.status:type_name -> master.Status
+	0, // 3: master.ReduceTaskInfo.status:type_name -> master.Status
+	1, // 4: master.MasterService.WorkerRegister:input_type -> master.WorkerRegisterRequest
+	3, // 5: master.MasterService.Heartbeat:input_type -> master.HeartbeatRequest
+	2, // 6: master.MasterService.WorkerRegister:output_type -> master.WorkerRegisterReply
+	4, // 7: master.MasterService.Heartbeat:output_type -> master.HeartbeatReply
+	6, // [6:8] is the sub-list for method output_type
+	4, // [4:6] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_rpc_master_proto_init() }
@@ -182,18 +608,23 @@ func file_rpc_master_proto_init() {
 	if File_rpc_master_proto != nil {
 		return
 	}
+	file_rpc_master_proto_msgTypes[3].OneofWrappers = []any{
+		(*HeartbeatReply_MapTaskInfo)(nil),
+		(*HeartbeatReply_ReduceTaskInfo)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rpc_master_proto_rawDesc), len(file_rpc_master_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   2,
+			NumEnums:      1,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_rpc_master_proto_goTypes,
 		DependencyIndexes: file_rpc_master_proto_depIdxs,
+		EnumInfos:         file_rpc_master_proto_enumTypes,
 		MessageInfos:      file_rpc_master_proto_msgTypes,
 	}.Build()
 	File_rpc_master_proto = out.File

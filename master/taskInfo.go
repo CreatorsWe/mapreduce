@@ -69,10 +69,8 @@ type ReduceTaskInfo struct {
 	WorkerID string
 
 	//开始时间和结束时间戳
-	PullDataStartTime time.Time
-	PullDataEndTime   time.Time
-	ReduceStartTime   time.Time
-	ReduceEndTime     time.Time
+	StartTime time.Time
+	EndTime time.Time
 }
 
 
@@ -83,9 +81,7 @@ func NewReduceTaskInfo(_id int, _reduceIndex int, _outputDir string) ReduceTaskI
 		ReduceIndex: _reduceIndex,
 		OutputDir: _outputDir,
 		WorkerID: "",
-		PullDataStartTime: time.Time{},
-		PullDataEndTime: time.Time{},
-		ReduceStartTime: time.Time{},
-		ReduceEndTime: time.Time{},
+		StartTime: time.Time{},
+		EndTime: time.Time{},
 	}
 }
