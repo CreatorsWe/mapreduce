@@ -2,16 +2,17 @@ package master
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math"
 	"net"
 	"sync"
 	"time"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/mapreduce_impl/common"
 	pb "github.com/mapreduce_impl/rpc"
+	"github.com/mapreduce_impl/utility"
 	"google.golang.org/grpc"
 )
 
@@ -24,42 +25,64 @@ import (
 // crashChan 错误
 // mux 锁，需要访问同一资源
 type Master struct {
-	UUID string
-
+	ID string
 	Address string
-	// Just record the brief information of workers, not complete worker struct.
+
+
+	NumMapTask int
+	NumReduceTask int
+	TotalNumWorker int
+	InputFile string
+	IntermediateDir string
+	OutputDir string
+
+	// worker information
 	Workers []WorkerInfo // Worker 信息
+	CurrentNumWorker int
 
-	NReduce int // 分区数量
-
+	// task information
 	MapTasks    []MapTaskInfo // 任务信息
 	ReduceTasks []ReduceTaskInfo
+	CurrentNumMapWorker    int // 执行 Map 任务的 Worker 数量
+	CurrentNumReduceWorker int // 执行 Reduce 任务的 Worker 数量
 
-	CurrentNumWorkers int // 当前 Worker 数量
-	TotalWorkers      int // 需要的总 Worker 数量
-
-	CurrentNumWorkerForMap    int // 执行 Map 任务的 Worker 数量
-	CurrentNumWorkerForReduce int // 执行 Reduce 任务的 Worker 数量
-
+	TaskRecord int   // 仅用于得到唯一的任务编号
 	WorkerMut sync.Mutex
-
+	NumWorkerMut sync.Mutex
 	pb.UnimplementedMasterServiceServer
 }
 
-// 输入文件姑且算作普通文件系统
-func NewMaster(totalWorkers, nMap, nReduce int, address string, inputFile string) Master {
+// 初始化固定信息
+func NewMaster(address string) Master {
 	return Master{
-		UUID:                      uuid.NewString(),
+		ID:                      uuid.NewString(),
 		Address:                   address,
-		Workers:                   nil,
-		NReduce:                   nReduce,
-		MapTasks:                  nil,
-		ReduceTasks:               nil,
-		CurrentNumWorkers:         0,
-		TotalWorkers:              totalWorkers,
-		CurrentNumWorkerForMap:    0,
-		CurrentNumWorkerForReduce: 0,
-		WorkerMut:                 sync.Mutex{},
+		TaskRecord: 0,
+		WorkerMut: sync.Mutex{},
+	}
+}
+
+// 初始化作用信息
+func (master *Master) JobInitialzation() {
+	master.TotalNumWorker = common.NumWorker
+	master.InputFile = common.InputDir
+	master.NumReduceTask = common.NReduce
+	master.IntermediateDir = common.IntermediateDir
+	master.OutputDir = common.OutputDir
+	// 初始化 Map 作业
+	master.InitMapJob()
+}
+
+func (master *Master) InitMapJob() {
+	// 计算 NumMapTask，Map 任务数量
+	master.NumMapTask = utility.NuminputFile()
+	// 初始化所有 Map 任务
+	for range master.NumMapTask {
+		inputFile := utility.GetinputFile()
+		mapTaskFormat := NewMaptaskFormat(inputFile, master.IntermediateDir, master.NumReduceTask)
+		mapTaskInfo := NewMapTaskInfo(master.TaskRecord, mapTaskFormat)
+		master.MapTasks = append(master.MapTasks, mapTaskInfo)
+		master.TaskRecord++
 	}
 }
 
@@ -182,13 +205,13 @@ func (master *Master) UpdateMasterOnTaskComplete(workerID string, taskID int, ta
 	// 2. 更新 workers
 	workerInfo.Status = common.WorkerStatusIdle
 	workerInfo.CompletedTasks = append(workerInfo.CompletedTasks, taskID)
-	
+
 	// 3. 更新 tasks
 	switch t := taskInfo.(type) {
 	case MapTaskInfo:
 		t.Status = common.TaskStatusCompleted
 		t.EndTime = time.Now()
-	case ReduceTaskInfo: 
+		case ReduceTaskInfo: 
 		t.Status = common.TaskStatusCompleted
 		t.EndTime = time.Now()	
 	}	

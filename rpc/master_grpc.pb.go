@@ -21,6 +21,8 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	MasterService_WorkerRegister_FullMethodName = "/master.MasterService/WorkerRegister"
 	MasterService_Heartbeat_FullMethodName      = "/master.MasterService/Heartbeat"
+	MasterService_TaskApply_FullMethodName      = "/master.MasterService/TaskApply"
+	MasterService_TaskCompletion_FullMethodName = "/master.MasterService/TaskCompletion"
 )
 
 // MasterServiceClient is the client API for MasterService service.
@@ -29,6 +31,8 @@ const (
 type MasterServiceClient interface {
 	WorkerRegister(ctx context.Context, in *WorkerRegisterRequest, opts ...grpc.CallOption) (*WorkerRegisterReply, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatReply, error)
+	TaskApply(ctx context.Context, in *TaskApplyRequest, opts ...grpc.CallOption) (*TaskApplyReply, error)
+	TaskCompletion(ctx context.Context, in *TaskCompletionRequest, opts ...grpc.CallOption) (*TaskCompletionReply, error)
 }
 
 type masterServiceClient struct {
@@ -59,12 +63,34 @@ func (c *masterServiceClient) Heartbeat(ctx context.Context, in *HeartbeatReques
 	return out, nil
 }
 
+func (c *masterServiceClient) TaskApply(ctx context.Context, in *TaskApplyRequest, opts ...grpc.CallOption) (*TaskApplyReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TaskApplyReply)
+	err := c.cc.Invoke(ctx, MasterService_TaskApply_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterServiceClient) TaskCompletion(ctx context.Context, in *TaskCompletionRequest, opts ...grpc.CallOption) (*TaskCompletionReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TaskCompletionReply)
+	err := c.cc.Invoke(ctx, MasterService_TaskCompletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MasterServiceServer is the server API for MasterService service.
 // All implementations must embed UnimplementedMasterServiceServer
 // for forward compatibility.
 type MasterServiceServer interface {
 	WorkerRegister(context.Context, *WorkerRegisterRequest) (*WorkerRegisterReply, error)
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatReply, error)
+	TaskApply(context.Context, *TaskApplyRequest) (*TaskApplyReply, error)
+	TaskCompletion(context.Context, *TaskCompletionRequest) (*TaskCompletionReply, error)
 	mustEmbedUnimplementedMasterServiceServer()
 }
 
@@ -80,6 +106,12 @@ func (UnimplementedMasterServiceServer) WorkerRegister(context.Context, *WorkerR
 }
 func (UnimplementedMasterServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedMasterServiceServer) TaskApply(context.Context, *TaskApplyRequest) (*TaskApplyReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method TaskApply not implemented")
+}
+func (UnimplementedMasterServiceServer) TaskCompletion(context.Context, *TaskCompletionRequest) (*TaskCompletionReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method TaskCompletion not implemented")
 }
 func (UnimplementedMasterServiceServer) mustEmbedUnimplementedMasterServiceServer() {}
 func (UnimplementedMasterServiceServer) testEmbeddedByValue()                       {}
@@ -138,6 +170,42 @@ func _MasterService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MasterService_TaskApply_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TaskApplyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServiceServer).TaskApply(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MasterService_TaskApply_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServiceServer).TaskApply(ctx, req.(*TaskApplyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MasterService_TaskCompletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TaskCompletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServiceServer).TaskCompletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MasterService_TaskCompletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServiceServer).TaskCompletion(ctx, req.(*TaskCompletionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MasterService_ServiceDesc is the grpc.ServiceDesc for MasterService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +220,14 @@ var MasterService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Heartbeat",
 			Handler:    _MasterService_Heartbeat_Handler,
+		},
+		{
+			MethodName: "TaskApply",
+			Handler:    _MasterService_TaskApply_Handler,
+		},
+		{
+			MethodName: "TaskCompletion",
+			Handler:    _MasterService_TaskCompletion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
