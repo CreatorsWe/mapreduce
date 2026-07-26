@@ -28,7 +28,7 @@ message WorkerRegisterReply {
 
 enum Signal {
   OK = 0;
-  REREGISTER = 1;
+  REGISTER = 1;
   SHUTDOWN = 2;
 }
 

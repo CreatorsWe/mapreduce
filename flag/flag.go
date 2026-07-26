@@ -3,11 +3,13 @@ package flag
 import (
 	"flag"
 
+	"fmt"
 	"github.com/mapreduce_impl/common"
 )
 
 
 func init() {
+	fmt.Println("flag init execute")
 	flag.IntVar(&common.NumWorker, "numWorker", 0, "the number of worker")
 	flag.IntVar(&common.NReduce, "nReduce", 0, "the number of Reduce task")
 	flag.StringVar(&common.InputDir, "inputPath", "", "the simulation of big file")

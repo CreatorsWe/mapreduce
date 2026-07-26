@@ -8,8 +8,8 @@ import (
 
 type WorkerInfo struct {
 	// 标识&地址
-	WorkerID string
-
+	ID string
+	Generation int
 	Address  string // ip:port
 
 	// 状态&存活
@@ -17,17 +17,18 @@ type WorkerInfo struct {
 	LastPing time.Time // 超时检测
 
 	// 执行的任务
-	RunningTasks   []int
+	RunningTask   int
 	CompletedTasks []int // 已完成的任务列表，如果该机器故障，Master 将重新分配所有已执行的任务
 }
 
-func NewWorkerInfo(WorkerID, Address string) WorkerInfo {
+func NewWorkerInfo(id string, generation int, address string) WorkerInfo {
 	return WorkerInfo{
-		WorkerID:       WorkerID,
-		Address:        Address,
+		ID:       id,
+		Generation: generation,
+		Address:        address,
 		Status:         common.WorkerStatusIdle,
 		LastPing:       time.Time{},
-		RunningTasks:   nil,
+		RunningTask:   -1,
 		CompletedTasks: nil,
 	}
 }

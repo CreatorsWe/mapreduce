@@ -2,10 +2,7 @@ package master
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"math"
-	"net"
 	"sync"
 	"time"
 
@@ -13,7 +10,6 @@ import (
 	"github.com/mapreduce_impl/common"
 	pb "github.com/mapreduce_impl/rpc"
 	"github.com/mapreduce_impl/utility"
-	"google.golang.org/grpc"
 )
 
 // worker vector
@@ -37,28 +33,48 @@ type Master struct {
 	OutputDir string
 
 	// worker information
-	Workers []WorkerInfo // Worker 信息
+	Workers map[string]*WorkerInfo // Worker 信息
 	CurrentNumWorker int
 
 	// task information
-	MapTasks    []MapTaskInfo // 任务信息
-	ReduceTasks []ReduceTaskInfo
+	Phase TaskType
+	MapTasks    map[int]*MapTaskInfo // 任务信息
+	ReduceTasks map[int]*ReduceTaskInfo
 	CurrentNumMapWorker    int // 执行 Map 任务的 Worker 数量
 	CurrentNumReduceWorker int // 执行 Reduce 任务的 Worker 数量
 
 	TaskRecord int   // 仅用于得到唯一的任务编号
 	WorkerMut sync.Mutex
-	NumWorkerMut sync.Mutex
+	MapTaskMut sync.Mutex
+	ReduceTaskMut sync.Mutex
+	PhaseMut sync.Mutex
 	pb.UnimplementedMasterServiceServer
 }
+
+
+type TaskType int
+
+const (
+	WAIT TaskType = iota
+	MAP
+	REDUCE
+) 
 
 // 初始化固定信息
 func NewMaster(address string) Master {
 	return Master{
 		ID:                      uuid.NewString(),
 		Address:                   address,
+		Workers: make(map[string]*WorkerInfo),
+		CurrentNumWorker: 0,
+		MapTasks: make(map[int]*MapTaskInfo),
+		ReduceTasks: make(map[int]*ReduceTaskInfo),
+		Phase: WAIT,
 		TaskRecord: 0,
 		WorkerMut: sync.Mutex{},
+		MapTaskMut: sync.Mutex{},
+		ReduceTaskMut: sync.Mutex{},
+		PhaseMut: sync.Mutex{},
 	}
 }
 
@@ -67,10 +83,10 @@ func (master *Master) JobInitialzation() {
 	master.TotalNumWorker = common.NumWorker
 	master.InputFile = common.InputDir
 	master.NumReduceTask = common.NReduce
-	master.IntermediateDir = common.IntermediateDir
-	master.OutputDir = common.OutputDir
+
 	// 初始化 Map 作业
 	master.InitMapJob()
+	master.Phase = MAP
 }
 
 func (master *Master) InitMapJob() {
@@ -81,139 +97,204 @@ func (master *Master) InitMapJob() {
 		inputFile := utility.GetinputFile()
 		mapTaskFormat := NewMaptaskFormat(inputFile, master.IntermediateDir, master.NumReduceTask)
 		mapTaskInfo := NewMapTaskInfo(master.TaskRecord, mapTaskFormat)
-		master.MapTasks = append(master.MapTasks, mapTaskInfo)
+		master.MapTasks[master.TaskRecord] = &mapTaskInfo
 		master.TaskRecord++
 	}
 }
 
 // 启动 Master 服务
 func (master *Master) StartService() {
-	// 1. 创建 gRPC 实例
-	grpcServer := grpc.NewServer()
-
-	// 2. 注册服务
-	pb.RegisterMasterServiceServer(grpcServer, master)
-
-	// 3. 指定端口上创建 TCP 监听器监听服务
-	listen, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Fatal("[TCP Service] TCP service start error")
-	}
-
-	err = grpcServer.Serve(listen)
-	if err != nil {
-		log.Fatal("[TCP Service] gRPC listen port error")
-	}
-	log.Println("[TCP Service] TCP service listening  on port 50051")
-
+	ctx := context.Background()	
+	go func() {
+		master.RpcServiceCall(ctx)
+	}()
+	master.WaitEnoughWorker(ctx)
 }
 
-// service MasterService {
-//   rpc WorkerRegister(WorkerRegisterRequest) returns (WorkerRegisterReply);
-//   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatReply);
-// }
+func (master *Master) WaitEnoughWorker(ctx context.Context) {
+	for {
+		if master.CurrentNumWorker >= master.TotalNumWorker {
+			break
+		}
+	}
+	log.Printf("[system] We get enough workers\n")
+
+}
+// 注册服务：
+// 如果是重新注册
+// 重置其状态
+// 如果首次注册
+// 
 func (master *Master) WorkerRegister(tx context.Context, req *pb.WorkerRegisterRequest) (*pb.WorkerRegisterReply, error) {
-	WorkerInfo := NewWorkerInfo(req.Uuid, req.Address)
 	master.WorkerMut.Lock()
-
-	master.Workers = append(master.Workers, WorkerInfo)
-	master.CurrentNumWorkers++
-
+	workerInfo, exist := master.Workers[req.WorkerId]
 	master.WorkerMut.Unlock()
-
-	log.Printf("[Worker Register] Worker %s registered in %s.", req.Uuid, req.Address)
-
+	if exist {
+		// 检查 generation
+		if workerInfo.Generation == int(req.Generation) {
+			workerInfo.Generation++
+			log.Printf("[worker register] %s", req.WorkerId) 
+			return &pb.WorkerRegisterReply{
+				Ok: true,
+				MasterId: master.ID,
+				Generation: int32(workerInfo.Generation),
+			}, nil
+		}
+		// 世代号不同，注册失败
+		log.Printf("[error] worker %s register fail, because the generation is no same", req.WorkerId)
+		return &pb.WorkerRegisterReply{
+			Ok: false,
+			MasterId: master.ID,
+			Generation: 0,
+		}, nil
+	}	
+	// 不存在，注册
+	NewWorkerInfo := NewWorkerInfo(req.WorkerId, 1, req.Address)
+	master.WorkerMut.Lock()
+	master.Workers[req.WorkerId] = &NewWorkerInfo
+	master.CurrentNumWorker++
+	master.WorkerMut.Unlock()
+	log.Printf("[worker register] %s", req.WorkerId)
 	return &pb.WorkerRegisterReply{
-		Ok:       true,
-		MasterId: master.UUID,
+		Ok: true,
+		MasterId: master.ID,
+		Generation: 1,
 	}, nil
 }
 
-func (master *Master) Heartbeat(tx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatReply, error) {
-	// 1. 根据 id 找到 workers
-	var worker *WorkerInfo
-	for _, w := range master.Workers {
-		if w.WorkerID == req.Uuid {
-			worker = &w
-			break
-		}
+func (master *Master) HeartbeatCheck(tx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatReply, error) {
+	// 1. 获取 worker，如果没有，返回失败
+	master.WorkerMut.Lock()
+	workerInfo, exist := master.Workers[req.WorkerId]
+	master.WorkerMut.Unlock()
+	if !exist {
+		return &pb.HeartbeatReply{Signal: pb.Signal_REGISTER}, nil
 	}
-
-	// 2. 更新 LastTime
-	worker.LastPing = time.Now()
-
-	// 3. 如果申请任务，返回任务并更新 map 信息（不应该这么草率，希望后面改进）
-	if req.RequestTask {
-		master.UpdateMasterOnTaskComplete(worker.WorkerID, int(req.CurrentTask), req.CurrentTaskType)	
-	} 
+	// 2. 判断世代号
+	if workerInfo.Generation != int(req.Generation) {
+		return &pb.HeartbeatReply{ Signal: pb.Signal_SHUTDOWN}, nil
+	}
+	// 3. 更新 LastPing
+	workerInfo.LastPing = time.Now()
+	return &pb.HeartbeatReply{Signal: pb.Signal_OK}, nil
 }
 
-func (master *Master) TaskInitialization(_jobInput common.BigFile, _blockSize int, _intermediateDir, _outputDir string) {
-	// compute M which the number of map task
-	M := int(math.Ceil(float64(_jobInput.TotalSize / _blockSize)))
-
-	idCount := 0
-
-	// 初始化 Map 任务
-	for range M {
-		mapTaskInfo := NewMapTaskInfo(idCount, _jobInput.NodeRecord, master.NReduce, _intermediateDir)
-		master.MapTasks = append(master.MapTasks, mapTaskInfo)
-		idCount++
+func (master *Master) TaskApply(tx context.Context, req *pb.TaskApplyRequest) (*pb.TaskApplyReply, error) {
+	// 1. 获取 worker， 判断世代号
+	master.WorkerMut.Lock()
+	workerInfo, exist := master.Workers[req.WorkerId]
+	master.WorkerMut.Unlock()
+	if !exist {
+		return &pb.TaskApplyReply{ Signal: pb.Signal_REGISTER }, nil
 	}
+	if workerInfo.Generation != int(req.Generation) {
+		return &pb.TaskApplyReply{ Signal: pb.Signal_SHUTDOWN }, nil
+	}
+	// 2. 分发任务
+	master.PhaseMut.Lock()
+	phase := master.Phase
+	master.PhaseMut.Unlock()
+	switch phase {
+	case MAP: 
+		master.MapTaskMut.Lock()
+		var map_task *MapTaskInfo
+		for _, taskInfo := range master.MapTasks {
+			if taskInfo.Status == common.TaskStatusIdle {
+				map_task = taskInfo
+			}
+		}
+		map_task.Status = common.TaskStatusRunning
+		map_task.WorkerID = req.WorkerId
+		map_task.StartTime = time.Now()
+		master.MapTaskMut.Unlock()
 
-	// 初始化 Reduce 任务
-	for i := range master.NReduce {
-		reduceTaskInfo := NewReduceTaskInfo(idCount, i, _outputDir)
-		master.ReduceTasks = append(master.ReduceTasks, reduceTaskInfo)
-		idCount++
+		workerInfo.RunningTask = map_task.ID
+
+		task_info := pb.MapTaskInfo {
+			TaskId: int32(map_task.ID),
+			InputFile: map_task.MapTaskFormat.InputFile,
+			NReduce: int32(map_task.MapTaskFormat.NReduce),
+			IntermediateDir: map_task.MapTaskFormat.IntermediateDir,
+
+		}
+		log.Printf("[task distribute] task %d is distributed to worker %s", map_task.ID, req.WorkerId)
+		return &pb.TaskApplyReply{Signal: pb.Signal_OK, TaskType: pb.TaskType_MAP, TaskInfo: &pb.TaskApplyReply_MapTaskInfo{MapTaskInfo: &task_info}}, nil
+	case REDUCE:
+		master.ReduceTaskMut.Lock()
+		var reduce_task *ReduceTaskInfo
+		for _, taskInfo := range master.ReduceTasks {
+			if taskInfo.Status == common.TaskStatusIdle {
+				reduce_task = taskInfo
+			}
+		}
+		reduce_task.Status = common.TaskStatusRunning
+		reduce_task.WorkerID = req.WorkerId
+		reduce_task.StartTime = time.Now()
+		master.ReduceTaskMut.Unlock()
+
+		workerInfo.RunningTask = reduce_task.ID
+	
+		task_info := pb.ReduceTaskInfo {
+			TaskId: int32(reduce_task.ID),
+			PartitionIndex: int32(reduce_task.ReduceTaskFormat.PartitionIndex),
+			PartitionPaths: reduce_task.InterMediateAddresses,
+			OutputDir: reduce_task.OutputPath,
+		}
+		log.Printf("[task distribute] task %d is distributed to worker %s", reduce_task.ID, req.WorkerId)
+		return &pb.TaskApplyReply{Signal: pb.Signal_OK, TaskType: pb.TaskType_REDUCE, TaskInfo: &pb.TaskApplyReply_ReduceTaskInfo{ReduceTaskInfo: &task_info}}, nil
+	default:
+		return &pb.TaskApplyReply{Signal: pb.Signal_SHUTDOWN}, nil
 	}
 }
 
-// 当一个 task 完成时，需要更新： 1. 执行它的 worker 信息； 2. 更新这个 task 的信息；
-func (master *Master) UpdateMasterOnTaskComplete(workerID string, taskID int, taskType string) error {
-	// 1. 判断 taskID 是否是这个 worker 正在执行的 task	
-	var workerInfo *WorkerInfo = nil
-	var taskInfo any
-	for _, w := range master.Workers {
-		if w.WorkerID == workerID {
-			workerInfo = &w
-			break
-		}
+// 在分发 reduce 任务之前，必须初始化 reduce 任务的输入文件路径
+func InitReduceTask()
+
+func (master *Master) TaskCompletion(ctx context.Context, req *pb.TaskCompletionRequest) (*pb.TaskCompletionReply, error) {
+	// 1. 获取 worker 比较 generation
+	master.WorkerMut.Lock()
+	workerInfo, exist := master.Workers[req.WorkerId]
+	master.WorkerMut.Unlock()
+	if !exist {
+		return &pb.TaskCompletionReply{Signal: pb.Signal_REGISTER}, nil	
 	}
-
-	switch taskType {
-	case "map":
-		for _, t := range master.MapTasks {
-			if t.ID == taskID {
-				taskInfo = &t
-				break
-			}
-		}
-	case "reduce":
-		for _, t := range master.ReduceTasks {
-			if t.ID == taskID {
-				taskInfo = &t
-				break
-			}
-		}
+	if workerInfo.Generation != int(req.Generation) {
+		return &pb.TaskCompletionReply{Signal: pb.Signal_SHUTDOWN}, nil
 	}
-
-	if workerInfo == nil || taskInfo == nil {
-		return fmt.Errorf("[Update Master]Do not find worker %s from master's workers", workerID)
+	// 2. 获取 task，判断其状态是否合法
+	switch req.TaskType {
+	case pb.TaskType_MAP:
+		master.MapTaskMut.Lock()
+		task, exist := master.MapTasks[int(req.TaskId)]
+		master.MapTaskMut.Unlock()
+		if !exist {
+			return &pb.TaskCompletionReply{Signal: pb.Signal_SHUTDOWN}, nil
+		}
+		// 更新 workerInfo，将 running -> completion
+		workerInfo.RunningTask = -1
+		workerInfo.CompletedTasks = append(workerInfo.CompletedTasks, int(req.TaskId))
+		// 更新 taskInfo
+		attach := req.Attach.(*pb.TaskCompletionRequest_MapAttach)
+		intermediateFiles := attach.MapAttach.IntermediateFiles
+		task.EndTime = time.Now()
+		task.Status = common.TaskStatusCompletion
+		task.InterMediateAddresses = intermediateFiles
+		return &pb.TaskCompletionReply{Signal: pb.Signal_OK}, nil
+	case pb.TaskType_REDUCE:
+		master.ReduceTaskMut.Lock()
+		task, exist := master.ReduceTasks[int(req.TaskId)]
+		master.ReduceTaskMut.Unlock()
+		if !exist {
+			return &pb.TaskCompletionReply{ Signal: pb.Signal_SHUTDOWN}, nil
+		}
+		workerInfo.RunningTask = -1
+		workerInfo.CompletedTasks = append(workerInfo.CompletedTasks, int(req.TaskId))
+		attach := req.Attach.(*pb.TaskCompletionRequest_ReduceAttach)
+		task.EndTime = time.Now()
+		task.Status = common.TaskStatusCompletion
+		task.OutputPath = attach.ReduceAttach.OutputFile
+		return &pb.TaskCompletionReply{ Signal: pb.Signal_OK}, nil
+	default:
+		return &pb.TaskCompletionReply{Signal: pb.Signal_SHUTDOWN}, nil
 	}
-
-	// 2. 更新 workers
-	workerInfo.Status = common.WorkerStatusIdle
-	workerInfo.CompletedTasks = append(workerInfo.CompletedTasks, taskID)
-
-	// 3. 更新 tasks
-	switch t := taskInfo.(type) {
-	case MapTaskInfo:
-		t.Status = common.TaskStatusCompleted
-		t.EndTime = time.Now()
-		case ReduceTaskInfo: 
-		t.Status = common.TaskStatusCompleted
-		t.EndTime = time.Now()	
-	}	
-	return nil
 }

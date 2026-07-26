@@ -24,22 +24,22 @@ const (
 type Signal int32
 
 const (
-	Signal_OK         Signal = 0
-	Signal_REREGISTER Signal = 1
-	Signal_SHUTDOWN   Signal = 2
+	Signal_OK       Signal = 0
+	Signal_REGISTER Signal = 1
+	Signal_SHUTDOWN Signal = 2
 )
 
 // Enum value maps for Signal.
 var (
 	Signal_name = map[int32]string{
 		0: "OK",
-		1: "REREGISTER",
+		1: "REGISTER",
 		2: "SHUTDOWN",
 	}
 	Signal_value = map[string]int32{
-		"OK":         0,
-		"REREGISTER": 1,
-		"SHUTDOWN":   2,
+		"OK":       0,
+		"REGISTER": 1,
+		"SHUTDOWN": 2,
 	}
 )
 
@@ -936,11 +936,10 @@ const file_rpc_master_proto_rawDesc = "" +
 	"\x12intermediate_files\x18\x01 \x03(\tR\x11intermediateFiles\"9\n" +
 	"\x16CompletionReduceAttach\x12\x1f\n" +
 	"\voutput_file\x18\x01 \x01(\tR\n" +
-	"outputFile*.\n" +
+	"outputFile*,\n" +
 	"\x06Signal\x12\x06\n" +
-	"\x02OK\x10\x00\x12\x0e\n" +
-	"\n" +
-	"REREGISTER\x10\x01\x12\f\n" +
+	"\x02OK\x10\x00\x12\f\n" +
+	"\bREGISTER\x10\x01\x12\f\n" +
 	"\bSHUTDOWN\x10\x02*)\n" +
 	"\bTaskType\x12\a\n" +
 	"\x03MAP\x10\x00\x12\n" +

@@ -1,12 +1,20 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/mapreduce_impl/common"
+	"github.com/mapreduce_impl/flag"
 	"github.com/mapreduce_impl/master"
 )
 
-func main() {
-	master := master.NewMaster(8, 10, 5, common.MASTER_ADDRESS, "/home/PatrickStar/Project/mapReduce_impl/input/file-01.txt")
+func init() {
+	flag.Parse()
+}
 
+
+func main() {
+	master := master.NewMaster(common.MASTER_ADDRESS)
+	master.JobInitialzation()
 	master.StartService()
 }

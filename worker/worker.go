@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/mapreduce_impl/common"
 	"google.golang.org/grpc"
@@ -24,37 +23,39 @@ type ReduceFunc func(string, ListKV) ListKV
 
 // 一个 Worker 两个 goroutine: 一个执行任务(简单), 一个发送心跳
 type Worker struct {
-	UUID    string // unique identifier of the Worker.  use for communication
+	ID    string // unique identifier of the Worker.  use for communication
 	Address string
+
+	Generation int
+
 	Mapf    MapFunc
 	Reducef ReduceFunc
-	NReduce int // 计算分区
+
 	Status  common.WorkerStatus
 
 	LastPing time.Time // 超时检测
 
 	// 执行的任务
-	RunningTasks   []int
+	RunningTask   int
 	CompletedTasks []int // 已完成的任务列表，如果该机器故障，Master 将重新分配所有已执行的任务
 }
 
 func NewWorker(address string) Worker {
 	return Worker{
-		UUID:           uuid.NewString(),
+		ID:           uuid.NewString(),
 		Address:        address,
 		Mapf:           nil,
 		Reducef:        nil,
-		NReduce:        0,
 		Status:         common.WorkerStatusIdle,
 		LastPing:       time.Time{},
-		RunningTasks:   nil,
+		RunningTask:   -1,
 		CompletedTasks: nil,
 	}
 }
 
-func (worker *Worker) Init() {
+func (worker *Worker) Run() {
 	// 客户端临时端口完全有操作系统分配，用户不应参与临时端口的分配
-	conn, err := grpc.NewClient(common.MASTER_ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.NewClient(common.MASTER_ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials())) 
 	if err != nil {
 		os.Exit(1)
 	}
@@ -68,20 +69,22 @@ func (worker *Worker) Init() {
 	defer cancel()
 
 	req := pb.WorkerRegisterRequest{
-		Uuid:    worker.UUID,
+		WorkerId:    worker.ID,
 		Address: worker.Address,
+		Generation: 0,
 	}
 
 	response, err := client.WorkerRegister(ctx, &req)
 	if err != nil {
-		log.Fatalf("[worker] %s worker register error", worker.UUID)
+		log.Fatalf("[worker] %s worker register error", worker.ID)
 	}
 
 	if !response.Ok {
-		log.Fatalf("[worker] %s worker register error", worker.UUID)
+		log.Fatalf("[worker] %s worker register error", worker.ID)
 	}
+	worker.Generation = int(response.Generation)
 
-	worker.NReduce = int(response.NReduce)
+	log.Printf("[worker] %s worker register success", worker.ID)
 
 	// 加载插件 Mapf Reducef
 }
