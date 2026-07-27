@@ -38,6 +38,13 @@ type Worker struct {
 	// 执行的任务
 	RunningTask   int
 	CompletedTasks []int // 已完成的任务列表，如果该机器故障，Master 将重新分配所有已执行的任务
+
+	masterConn MasterConn
+}
+
+type MasterConn struct {
+	client *pb.MasterServiceClient
+	conn *grpc.ClientConn
 }
 
 func NewWorker(address string) Worker {
@@ -53,38 +60,84 @@ func NewWorker(address string) Worker {
 	}
 }
 
-func (worker *Worker) Run() {
+func (worker *Worker) InitConn(master_address string) {
 	// 客户端临时端口完全有操作系统分配，用户不应参与临时端口的分配
 	conn, err := grpc.NewClient(common.MASTER_ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials())) 
 	if err != nil {
 		os.Exit(1)
 	}
 
-	defer conn.Close()
 
 	client := pb.NewMasterServiceClient(conn)
+	
+	worker.masterConn.conn = conn 
+	worker.masterConn.client = &client
+
+}
+
+func (worker *Worker) service() pb.MasterServiceClient {
+	return *worker.masterConn.client
+}
+
+func (worker *Worker) Close() {
+	worker.masterConn.conn.Close()
+}
+
+
+func (worker *Worker) Run() {
 
 	// PRC 调用远程方法
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	worker.registerWorker(ctx, cancel)
+	
+
+
+	// Heartbeat
+}
+
+
+
+func (worker *Worker) registerWorker(ctx context.Context, cancel context.CancelFunc) bool {
+	log.Printf("[worker register] worker %s start register service\n", worker.ID)
+	
 	req := pb.WorkerRegisterRequest{
 		WorkerId:    worker.ID,
 		Address: worker.Address,
 		Generation: 0,
 	}
 
-	response, err := client.WorkerRegister(ctx, &req)
+	response, err := worker.service().WorkerRegister(ctx, &req)
+
 	if err != nil {
-		log.Fatalf("[worker] %s worker register error", worker.ID)
+		log.Printf("[worker register] worker %s register error\n", worker.ID)
+		return false
 	}
 
-	if !response.Ok {
-		log.Fatalf("[worker] %s worker register error", worker.ID)
+	switch response.Signal {
+	case pb.Signal_OK:
+		worker.Generation = int(response.Generation)
+		log.Printf("[worker register] worker %s register success\n", worker.ID)
+		return true
+	case pb.Signal_SHUTDOWN:
+		cancel()
+	default:
+		log.Printf("[error] enter the impossible case, will exit\n")
+		cancel()
+		os.Exit(1)
 	}
-	worker.Generation = int(response.Generation)
-
-	log.Printf("[worker] %s worker register success", worker.ID)
-
-	// 加载插件 Mapf Reducef
+	return false
 }
+
+func (worker *Worker) registerUntilSucessOrShutdown() {}
+
+func (worker *Worker) Map() {}
+
+func (worker *Worker) Reduce() {}
+
+func (worker *Worker) heartbeat() {}
+
+func (worker *Worker) applyTask() {}
+
+func (worker *Worker) completeTask() {}

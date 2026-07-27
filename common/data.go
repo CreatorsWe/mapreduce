@@ -10,4 +10,5 @@ var (
 	InputDir string
 	IntermediateDir string
 	OutputDir string
+	IsDebug bool
 )

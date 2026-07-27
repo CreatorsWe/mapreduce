@@ -27,6 +27,7 @@ const (
 	Signal_OK       Signal = 0
 	Signal_REGISTER Signal = 1
 	Signal_SHUTDOWN Signal = 2
+	Signal_WAIT     Signal = 3
 )
 
 // Enum value maps for Signal.
@@ -35,11 +36,13 @@ var (
 		0: "OK",
 		1: "REGISTER",
 		2: "SHUTDOWN",
+		3: "WAIT",
 	}
 	Signal_value = map[string]int32{
 		"OK":       0,
 		"REGISTER": 1,
 		"SHUTDOWN": 2,
+		"WAIT":     3,
 	}
 )
 
@@ -75,7 +78,6 @@ type TaskType int32
 const (
 	TaskType_MAP    TaskType = 0
 	TaskType_REDUCE TaskType = 1
-	TaskType_WAIT   TaskType = 2
 )
 
 // Enum value maps for TaskType.
@@ -83,12 +85,10 @@ var (
 	TaskType_name = map[int32]string{
 		0: "MAP",
 		1: "REDUCE",
-		2: "WAIT",
 	}
 	TaskType_value = map[string]int32{
 		"MAP":    0,
 		"REDUCE": 1,
-		"WAIT":   2,
 	}
 )
 
@@ -183,7 +183,7 @@ func (x *WorkerRegisterRequest) GetGeneration() int32 {
 // Map 阶段需要 NReduce 计算分区：partition = hash(key) % nReduce。相同的 key 进入相同的 分区
 type WorkerRegisterReply struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Signal        Signal                 `protobuf:"varint,1,opt,name=signal,proto3,enum=master.Signal" json:"signal,omitempty"`
 	MasterId      string                 `protobuf:"bytes,2,opt,name=master_id,json=masterId,proto3" json:"master_id,omitempty"`
 	Generation    int32                  `protobuf:"varint,3,opt,name=generation,proto3" json:"generation,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -220,11 +220,11 @@ func (*WorkerRegisterReply) Descriptor() ([]byte, []int) {
 	return file_rpc_master_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *WorkerRegisterReply) GetOk() bool {
+func (x *WorkerRegisterReply) GetSignal() Signal {
 	if x != nil {
-		return x.Ok
+		return x.Signal
 	}
-	return false
+	return Signal_OK
 }
 
 func (x *WorkerRegisterReply) GetMasterId() string {
@@ -882,9 +882,9 @@ const file_rpc_master_proto_rawDesc = "" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x03 \x01(\x05R\n" +
-	"generation\"b\n" +
-	"\x13WorkerRegisterReply\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1b\n" +
+	"generation\"z\n" +
+	"\x13WorkerRegisterReply\x12&\n" +
+	"\x06signal\x18\x01 \x01(\x0e2\x0e.master.SignalR\x06signal\x12\x1b\n" +
 	"\tmaster_id\x18\x02 \x01(\tR\bmasterId\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x03 \x01(\x05R\n" +
@@ -936,16 +936,16 @@ const file_rpc_master_proto_rawDesc = "" +
 	"\x12intermediate_files\x18\x01 \x03(\tR\x11intermediateFiles\"9\n" +
 	"\x16CompletionReduceAttach\x12\x1f\n" +
 	"\voutput_file\x18\x01 \x01(\tR\n" +
-	"outputFile*,\n" +
+	"outputFile*6\n" +
 	"\x06Signal\x12\x06\n" +
 	"\x02OK\x10\x00\x12\f\n" +
 	"\bREGISTER\x10\x01\x12\f\n" +
-	"\bSHUTDOWN\x10\x02*)\n" +
+	"\bSHUTDOWN\x10\x02\x12\b\n" +
+	"\x04WAIT\x10\x03*\x1f\n" +
 	"\bTaskType\x12\a\n" +
 	"\x03MAP\x10\x00\x12\n" +
 	"\n" +
-	"\x06REDUCE\x10\x01\x12\b\n" +
-	"\x04WAIT\x10\x022\xa9\x02\n" +
+	"\x06REDUCE\x10\x012\xa9\x02\n" +
 	"\rMasterService\x12L\n" +
 	"\x0eWorkerRegister\x12\x1d.master.WorkerRegisterRequest\x1a\x1b.master.WorkerRegisterReply\x12=\n" +
 	"\tHeartbeat\x12\x18.master.HeartbeatRequest\x1a\x16.master.HeartbeatReply\x12=\n" +
@@ -983,28 +983,29 @@ var file_rpc_master_proto_goTypes = []any{
 	(*CompletionReduceAttach)(nil), // 13: master.CompletionReduceAttach
 }
 var file_rpc_master_proto_depIdxs = []int32{
-	0,  // 0: master.HeartbeatReply.signal:type_name -> master.Signal
-	0,  // 1: master.TaskApplyReply.signal:type_name -> master.Signal
-	1,  // 2: master.TaskApplyReply.task_type:type_name -> master.TaskType
-	8,  // 3: master.TaskApplyReply.map_task_info:type_name -> master.MapTaskInfo
-	9,  // 4: master.TaskApplyReply.reduce_task_info:type_name -> master.ReduceTaskInfo
-	1,  // 5: master.TaskCompletionRequest.task_type:type_name -> master.TaskType
-	12, // 6: master.TaskCompletionRequest.map_attach:type_name -> master.CompletionMapAttach
-	13, // 7: master.TaskCompletionRequest.reduce_attach:type_name -> master.CompletionReduceAttach
-	0,  // 8: master.TaskCompletionReply.signal:type_name -> master.Signal
-	2,  // 9: master.MasterService.WorkerRegister:input_type -> master.WorkerRegisterRequest
-	4,  // 10: master.MasterService.Heartbeat:input_type -> master.HeartbeatRequest
-	6,  // 11: master.MasterService.TaskApply:input_type -> master.TaskApplyRequest
-	10, // 12: master.MasterService.TaskCompletion:input_type -> master.TaskCompletionRequest
-	3,  // 13: master.MasterService.WorkerRegister:output_type -> master.WorkerRegisterReply
-	5,  // 14: master.MasterService.Heartbeat:output_type -> master.HeartbeatReply
-	7,  // 15: master.MasterService.TaskApply:output_type -> master.TaskApplyReply
-	11, // 16: master.MasterService.TaskCompletion:output_type -> master.TaskCompletionReply
-	13, // [13:17] is the sub-list for method output_type
-	9,  // [9:13] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	0,  // 0: master.WorkerRegisterReply.signal:type_name -> master.Signal
+	0,  // 1: master.HeartbeatReply.signal:type_name -> master.Signal
+	0,  // 2: master.TaskApplyReply.signal:type_name -> master.Signal
+	1,  // 3: master.TaskApplyReply.task_type:type_name -> master.TaskType
+	8,  // 4: master.TaskApplyReply.map_task_info:type_name -> master.MapTaskInfo
+	9,  // 5: master.TaskApplyReply.reduce_task_info:type_name -> master.ReduceTaskInfo
+	1,  // 6: master.TaskCompletionRequest.task_type:type_name -> master.TaskType
+	12, // 7: master.TaskCompletionRequest.map_attach:type_name -> master.CompletionMapAttach
+	13, // 8: master.TaskCompletionRequest.reduce_attach:type_name -> master.CompletionReduceAttach
+	0,  // 9: master.TaskCompletionReply.signal:type_name -> master.Signal
+	2,  // 10: master.MasterService.WorkerRegister:input_type -> master.WorkerRegisterRequest
+	4,  // 11: master.MasterService.Heartbeat:input_type -> master.HeartbeatRequest
+	6,  // 12: master.MasterService.TaskApply:input_type -> master.TaskApplyRequest
+	10, // 13: master.MasterService.TaskCompletion:input_type -> master.TaskCompletionRequest
+	3,  // 14: master.MasterService.WorkerRegister:output_type -> master.WorkerRegisterReply
+	5,  // 15: master.MasterService.Heartbeat:output_type -> master.HeartbeatReply
+	7,  // 16: master.MasterService.TaskApply:output_type -> master.TaskApplyReply
+	11, // 17: master.MasterService.TaskCompletion:output_type -> master.TaskCompletionReply
+	14, // [14:18] is the sub-list for method output_type
+	10, // [10:14] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_rpc_master_proto_init() }

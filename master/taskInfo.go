@@ -2,7 +2,7 @@ package master
 
 import (
 	"time"
-
+	"fmt"
 	"github.com/mapreduce_impl/common"
 )
 
@@ -33,6 +33,29 @@ type MapTaskFormat struct {
 	// 输出到 Worker 普通本地磁盘
 	IntermediateDir string
 	NReduce         int // 计算分区（输出文件）数量
+}
+
+func GetInitMapTaskInfo(map_task_info MapTaskInfo) string {
+	return fmt.Sprintf("{ id: %d, input_file: %s, intermediate_dir: %s, partition_num: %d }",  
+		map_task_info.ID, 
+		map_task_info.MapTaskFormat.InputFile, 
+		map_task_info.MapTaskFormat.IntermediateDir, 
+		map_task_info.MapTaskFormat.NReduce)
+}
+
+func GetTotalMapTaskInfo(map_task_info MapTaskInfo) string {
+	return fmt.Sprintf("{ id: %d, input_file: %s, intermediate_dir: %s, partition_num: %d, worker_id: %s, status: %s, start: %s, end: %s, intermediate_address: %v}",  
+		map_task_info.ID, 
+		map_task_info.MapTaskFormat.InputFile, 
+		map_task_info.MapTaskFormat.IntermediateDir, 
+		map_task_info.MapTaskFormat.NReduce,
+		map_task_info.WorkerID,
+		map_task_info.Status,
+		map_task_info.StartTime,
+		map_task_info.EndTime,
+		map_task_info.InterMediateAddresses,
+	)
+	
 }
 
 func NewMaptaskFormat(input_file, intermediate_dir string, n_reduce int) MapTaskFormat {
@@ -81,6 +104,27 @@ type ReduceTaskFormat struct {
 
 	// 输出
 	OutputDir string
+}
+
+func GetInitReduceTaskInfo(reduce_task_info ReduceTaskInfo) string {
+	return fmt.Sprintf("{ id: %d, partition_index: %d, output_dir: %s }",
+		reduce_task_info.ID,
+		reduce_task_info.ReduceTaskFormat.PartitionIndex,
+		reduce_task_info.ReduceTaskFormat.OutputDir)
+}
+
+
+func GetTotalReduceTaskInfo(reduce_task_info ReduceTaskInfo) string {
+	return fmt.Sprintf("{ id: %d, partition_index: %d, output_dir: %s, worker_id: %s, status: %s, start: %s, end: %s, intermediate_address: %v, output: %s }",
+		reduce_task_info.ID,
+		reduce_task_info.ReduceTaskFormat.PartitionIndex,
+		reduce_task_info.ReduceTaskFormat.OutputDir,
+		reduce_task_info.WorkerID,
+		reduce_task_info.Status,
+		reduce_task_info.StartTime,
+		reduce_task_info.EndTime,
+		reduce_task_info.InterMediateAddresses, 
+		reduce_task_info.OutputPath)
 }
 
 func NewReduceTaskFormat(partition_index int, output_dir string) ReduceTaskFormat {

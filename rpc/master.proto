@@ -20,7 +20,7 @@ message WorkerRegisterRequest {
 
 // Map 阶段需要 NReduce 计算分区：partition = hash(key) % nReduce。相同的 key 进入相同的 分区
 message WorkerRegisterReply {
-  bool ok = 1;
+  Signal signal = 1;
   string master_id = 2;
   int32 generation = 3;
 }
@@ -30,6 +30,7 @@ enum Signal {
   OK = 0;
   REGISTER = 1;
   SHUTDOWN = 2;
+  WAIT = 3;
 }
 
 // Heartbeat
@@ -61,7 +62,6 @@ message TaskApplyReply {
 enum TaskType {
   MAP = 0;
   REDUCE = 1;
-  WAIT = 2;
 }
 
 

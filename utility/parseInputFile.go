@@ -28,13 +28,13 @@ func init() {
 }
 
 
-func NuminputFile() int {
+func NumInputFile() int {
 	if inputFiles == nil { return 0 }
 	return len(inputFiles)
 }
 
 
-func GetinputFile() string {
+func GetInputFile() string {
 	current_index := inputFileIndex
 	inputFileIndex++
 	return inputFiles[current_index]
