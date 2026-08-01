@@ -394,7 +394,8 @@ func (x *TaskApplyRequest) GetGeneration() int32 {
 type TaskApplyReply struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Signal   Signal                 `protobuf:"varint,1,opt,name=signal,proto3,enum=master.Signal" json:"signal,omitempty"`
-	TaskType TaskType               `protobuf:"varint,2,opt,name=task_type,json=taskType,proto3,enum=master.TaskType" json:"task_type,omitempty"`
+	TaskId   int32                  `protobuf:"varint,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	TaskType TaskType               `protobuf:"varint,3,opt,name=task_type,json=taskType,proto3,enum=master.TaskType" json:"task_type,omitempty"`
 	// Types that are valid to be assigned to TaskInfo:
 	//
 	//	*TaskApplyReply_MapTaskInfo
@@ -441,6 +442,13 @@ func (x *TaskApplyReply) GetSignal() Signal {
 	return Signal_OK
 }
 
+func (x *TaskApplyReply) GetTaskId() int32 {
+	if x != nil {
+		return x.TaskId
+	}
+	return 0
+}
+
 func (x *TaskApplyReply) GetTaskType() TaskType {
 	if x != nil {
 		return x.TaskType
@@ -478,11 +486,11 @@ type isTaskApplyReply_TaskInfo interface {
 }
 
 type TaskApplyReply_MapTaskInfo struct {
-	MapTaskInfo *MapTaskInfo `protobuf:"bytes,3,opt,name=map_task_info,json=mapTaskInfo,proto3,oneof"`
+	MapTaskInfo *MapTaskInfo `protobuf:"bytes,4,opt,name=map_task_info,json=mapTaskInfo,proto3,oneof"`
 }
 
 type TaskApplyReply_ReduceTaskInfo struct {
-	ReduceTaskInfo *ReduceTaskInfo `protobuf:"bytes,4,opt,name=reduce_task_info,json=reduceTaskInfo,proto3,oneof"`
+	ReduceTaskInfo *ReduceTaskInfo `protobuf:"bytes,5,opt,name=reduce_task_info,json=reduceTaskInfo,proto3,oneof"`
 }
 
 func (*TaskApplyReply_MapTaskInfo) isTaskApplyReply_TaskInfo() {}
@@ -491,10 +499,9 @@ func (*TaskApplyReply_ReduceTaskInfo) isTaskApplyReply_TaskInfo() {}
 
 type MapTaskInfo struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	TaskId          int32                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	InputFile       string                 `protobuf:"bytes,2,opt,name=input_file,json=inputFile,proto3" json:"input_file,omitempty"`
-	NReduce         int32                  `protobuf:"varint,3,opt,name=n_reduce,json=nReduce,proto3" json:"n_reduce,omitempty"`
-	IntermediateDir string                 `protobuf:"bytes,4,opt,name=intermediate_dir,json=intermediateDir,proto3" json:"intermediate_dir,omitempty"`
+	InputFormatter  *InputFormatter        `protobuf:"bytes,1,opt,name=input_formatter,json=inputFormatter,proto3" json:"input_formatter,omitempty"`
+	PartitionCount  int32                  `protobuf:"varint,2,opt,name=partition_count,json=partitionCount,proto3" json:"partition_count,omitempty"`
+	IntermediateDir string                 `protobuf:"bytes,3,opt,name=intermediate_dir,json=intermediateDir,proto3" json:"intermediate_dir,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -529,23 +536,16 @@ func (*MapTaskInfo) Descriptor() ([]byte, []int) {
 	return file_rpc_master_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *MapTaskInfo) GetTaskId() int32 {
+func (x *MapTaskInfo) GetInputFormatter() *InputFormatter {
 	if x != nil {
-		return x.TaskId
+		return x.InputFormatter
 	}
-	return 0
+	return nil
 }
 
-func (x *MapTaskInfo) GetInputFile() string {
+func (x *MapTaskInfo) GetPartitionCount() int32 {
 	if x != nil {
-		return x.InputFile
-	}
-	return ""
-}
-
-func (x *MapTaskInfo) GetNReduce() int32 {
-	if x != nil {
-		return x.NReduce
+		return x.PartitionCount
 	}
 	return 0
 }
@@ -559,10 +559,9 @@ func (x *MapTaskInfo) GetIntermediateDir() string {
 
 type ReduceTaskInfo struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	TaskId         int32                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	PartitionIndex int32                  `protobuf:"varint,2,opt,name=partition_index,json=partitionIndex,proto3" json:"partition_index,omitempty"`
-	PartitionPaths []string               `protobuf:"bytes,3,rep,name=partition_paths,json=partitionPaths,proto3" json:"partition_paths,omitempty"`
-	OutputDir      string                 `protobuf:"bytes,4,opt,name=output_dir,json=outputDir,proto3" json:"output_dir,omitempty"`
+	PartitionIndex int32                  `protobuf:"varint,1,opt,name=partition_index,json=partitionIndex,proto3" json:"partition_index,omitempty"`
+	PartitionPaths []string               `protobuf:"bytes,2,rep,name=partition_paths,json=partitionPaths,proto3" json:"partition_paths,omitempty"`
+	OutputDir      string                 `protobuf:"bytes,3,opt,name=output_dir,json=outputDir,proto3" json:"output_dir,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -597,13 +596,6 @@ func (*ReduceTaskInfo) Descriptor() ([]byte, []int) {
 	return file_rpc_master_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *ReduceTaskInfo) GetTaskId() int32 {
-	if x != nil {
-		return x.TaskId
-	}
-	return 0
-}
-
 func (x *ReduceTaskInfo) GetPartitionIndex() int32 {
 	if x != nil {
 		return x.PartitionIndex
@@ -625,6 +617,66 @@ func (x *ReduceTaskInfo) GetOutputDir() string {
 	return ""
 }
 
+type InputFormatter struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InputPath     string                 `protobuf:"bytes,1,opt,name=input_path,json=inputPath,proto3" json:"input_path,omitempty"`
+	From          int32                  `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
+	To            int32                  `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InputFormatter) Reset() {
+	*x = InputFormatter{}
+	mi := &file_rpc_master_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InputFormatter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InputFormatter) ProtoMessage() {}
+
+func (x *InputFormatter) ProtoReflect() protoreflect.Message {
+	mi := &file_rpc_master_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InputFormatter.ProtoReflect.Descriptor instead.
+func (*InputFormatter) Descriptor() ([]byte, []int) {
+	return file_rpc_master_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *InputFormatter) GetInputPath() string {
+	if x != nil {
+		return x.InputPath
+	}
+	return ""
+}
+
+func (x *InputFormatter) GetFrom() int32 {
+	if x != nil {
+		return x.From
+	}
+	return 0
+}
+
+func (x *InputFormatter) GetTo() int32 {
+	if x != nil {
+		return x.To
+	}
+	return 0
+}
+
 // TaskCompletion
 type TaskCompletionRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
@@ -643,7 +695,7 @@ type TaskCompletionRequest struct {
 
 func (x *TaskCompletionRequest) Reset() {
 	*x = TaskCompletionRequest{}
-	mi := &file_rpc_master_proto_msgTypes[8]
+	mi := &file_rpc_master_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -655,7 +707,7 @@ func (x *TaskCompletionRequest) String() string {
 func (*TaskCompletionRequest) ProtoMessage() {}
 
 func (x *TaskCompletionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rpc_master_proto_msgTypes[8]
+	mi := &file_rpc_master_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -668,7 +720,7 @@ func (x *TaskCompletionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskCompletionRequest.ProtoReflect.Descriptor instead.
 func (*TaskCompletionRequest) Descriptor() ([]byte, []int) {
-	return file_rpc_master_proto_rawDescGZIP(), []int{8}
+	return file_rpc_master_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TaskCompletionRequest) GetWorkerId() string {
@@ -749,7 +801,7 @@ type TaskCompletionReply struct {
 
 func (x *TaskCompletionReply) Reset() {
 	*x = TaskCompletionReply{}
-	mi := &file_rpc_master_proto_msgTypes[9]
+	mi := &file_rpc_master_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -761,7 +813,7 @@ func (x *TaskCompletionReply) String() string {
 func (*TaskCompletionReply) ProtoMessage() {}
 
 func (x *TaskCompletionReply) ProtoReflect() protoreflect.Message {
-	mi := &file_rpc_master_proto_msgTypes[9]
+	mi := &file_rpc_master_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -774,7 +826,7 @@ func (x *TaskCompletionReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskCompletionReply.ProtoReflect.Descriptor instead.
 func (*TaskCompletionReply) Descriptor() ([]byte, []int) {
-	return file_rpc_master_proto_rawDescGZIP(), []int{9}
+	return file_rpc_master_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TaskCompletionReply) GetSignal() Signal {
@@ -786,14 +838,14 @@ func (x *TaskCompletionReply) GetSignal() Signal {
 
 type CompletionMapAttach struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	IntermediateFiles []string               `protobuf:"bytes,1,rep,name=intermediate_files,json=intermediateFiles,proto3" json:"intermediate_files,omitempty"` // 文件路径由： ip:port/path/file_name
+	IntermediatePaths []string               `protobuf:"bytes,1,rep,name=intermediate_paths,json=intermediatePaths,proto3" json:"intermediate_paths,omitempty"` // 文件路径由： ip:port/path/file_name
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *CompletionMapAttach) Reset() {
 	*x = CompletionMapAttach{}
-	mi := &file_rpc_master_proto_msgTypes[10]
+	mi := &file_rpc_master_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +857,7 @@ func (x *CompletionMapAttach) String() string {
 func (*CompletionMapAttach) ProtoMessage() {}
 
 func (x *CompletionMapAttach) ProtoReflect() protoreflect.Message {
-	mi := &file_rpc_master_proto_msgTypes[10]
+	mi := &file_rpc_master_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,26 +870,26 @@ func (x *CompletionMapAttach) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompletionMapAttach.ProtoReflect.Descriptor instead.
 func (*CompletionMapAttach) Descriptor() ([]byte, []int) {
-	return file_rpc_master_proto_rawDescGZIP(), []int{10}
+	return file_rpc_master_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *CompletionMapAttach) GetIntermediateFiles() []string {
+func (x *CompletionMapAttach) GetIntermediatePaths() []string {
 	if x != nil {
-		return x.IntermediateFiles
+		return x.IntermediatePaths
 	}
 	return nil
 }
 
 type CompletionReduceAttach struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	OutputFile    string                 `protobuf:"bytes,1,opt,name=output_file,json=outputFile,proto3" json:"output_file,omitempty"`
+	OutputPath    string                 `protobuf:"bytes,1,opt,name=output_path,json=outputPath,proto3" json:"output_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CompletionReduceAttach) Reset() {
 	*x = CompletionReduceAttach{}
-	mi := &file_rpc_master_proto_msgTypes[11]
+	mi := &file_rpc_master_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -849,7 +901,7 @@ func (x *CompletionReduceAttach) String() string {
 func (*CompletionReduceAttach) ProtoMessage() {}
 
 func (x *CompletionReduceAttach) ProtoReflect() protoreflect.Message {
-	mi := &file_rpc_master_proto_msgTypes[11]
+	mi := &file_rpc_master_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -862,12 +914,12 @@ func (x *CompletionReduceAttach) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompletionReduceAttach.ProtoReflect.Descriptor instead.
 func (*CompletionReduceAttach) Descriptor() ([]byte, []int) {
-	return file_rpc_master_proto_rawDescGZIP(), []int{11}
+	return file_rpc_master_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *CompletionReduceAttach) GetOutputFile() string {
+func (x *CompletionReduceAttach) GetOutputPath() string {
 	if x != nil {
-		return x.OutputFile
+		return x.OutputPath
 	}
 	return ""
 }
@@ -900,25 +952,28 @@ const file_rpc_master_proto_rawDesc = "" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x02 \x01(\x05R\n" +
-	"generation\"\xf3\x01\n" +
+	"generation\"\x8c\x02\n" +
 	"\x0eTaskApplyReply\x12&\n" +
-	"\x06signal\x18\x01 \x01(\x0e2\x0e.master.SignalR\x06signal\x12-\n" +
-	"\ttask_type\x18\x02 \x01(\x0e2\x10.master.TaskTypeR\btaskType\x129\n" +
-	"\rmap_task_info\x18\x03 \x01(\v2\x13.master.MapTaskInfoH\x00R\vmapTaskInfo\x12B\n" +
-	"\x10reduce_task_info\x18\x04 \x01(\v2\x16.master.ReduceTaskInfoH\x00R\x0ereduceTaskInfoB\v\n" +
-	"\ttask_info\"\x8b\x01\n" +
-	"\vMapTaskInfo\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\x05R\x06taskId\x12\x1d\n" +
+	"\x06signal\x18\x01 \x01(\x0e2\x0e.master.SignalR\x06signal\x12\x17\n" +
+	"\atask_id\x18\x02 \x01(\x05R\x06taskId\x12-\n" +
+	"\ttask_type\x18\x03 \x01(\x0e2\x10.master.TaskTypeR\btaskType\x129\n" +
+	"\rmap_task_info\x18\x04 \x01(\v2\x13.master.MapTaskInfoH\x00R\vmapTaskInfo\x12B\n" +
+	"\x10reduce_task_info\x18\x05 \x01(\v2\x16.master.ReduceTaskInfoH\x00R\x0ereduceTaskInfoB\v\n" +
+	"\ttask_info\"\xa2\x01\n" +
+	"\vMapTaskInfo\x12?\n" +
+	"\x0finput_formatter\x18\x01 \x01(\v2\x16.master.InputFormatterR\x0einputFormatter\x12'\n" +
+	"\x0fpartition_count\x18\x02 \x01(\x05R\x0epartitionCount\x12)\n" +
+	"\x10intermediate_dir\x18\x03 \x01(\tR\x0fintermediateDir\"\x81\x01\n" +
+	"\x0eReduceTaskInfo\x12'\n" +
+	"\x0fpartition_index\x18\x01 \x01(\x05R\x0epartitionIndex\x12'\n" +
+	"\x0fpartition_paths\x18\x02 \x03(\tR\x0epartitionPaths\x12\x1d\n" +
 	"\n" +
-	"input_file\x18\x02 \x01(\tR\tinputFile\x12\x19\n" +
-	"\bn_reduce\x18\x03 \x01(\x05R\anReduce\x12)\n" +
-	"\x10intermediate_dir\x18\x04 \x01(\tR\x0fintermediateDir\"\x9a\x01\n" +
-	"\x0eReduceTaskInfo\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\x05R\x06taskId\x12'\n" +
-	"\x0fpartition_index\x18\x02 \x01(\x05R\x0epartitionIndex\x12'\n" +
-	"\x0fpartition_paths\x18\x03 \x03(\tR\x0epartitionPaths\x12\x1d\n" +
+	"output_dir\x18\x03 \x01(\tR\toutputDir\"S\n" +
+	"\x0eInputFormatter\x12\x1d\n" +
 	"\n" +
-	"output_dir\x18\x04 \x01(\tR\toutputDir\"\xab\x02\n" +
+	"input_path\x18\x01 \x01(\tR\tinputPath\x12\x12\n" +
+	"\x04from\x18\x02 \x01(\x05R\x04from\x12\x0e\n" +
+	"\x02to\x18\x03 \x01(\x05R\x02to\"\xab\x02\n" +
 	"\x15TaskCompletionRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1e\n" +
 	"\n" +
@@ -933,10 +988,10 @@ const file_rpc_master_proto_rawDesc = "" +
 	"\x13TaskCompletionReply\x12&\n" +
 	"\x06signal\x18\x01 \x01(\x0e2\x0e.master.SignalR\x06signal\"D\n" +
 	"\x13CompletionMapAttach\x12-\n" +
-	"\x12intermediate_files\x18\x01 \x03(\tR\x11intermediateFiles\"9\n" +
+	"\x12intermediate_paths\x18\x01 \x03(\tR\x11intermediatePaths\"9\n" +
 	"\x16CompletionReduceAttach\x12\x1f\n" +
-	"\voutput_file\x18\x01 \x01(\tR\n" +
-	"outputFile*6\n" +
+	"\voutput_path\x18\x01 \x01(\tR\n" +
+	"outputPath*6\n" +
 	"\x06Signal\x12\x06\n" +
 	"\x02OK\x10\x00\x12\f\n" +
 	"\bREGISTER\x10\x01\x12\f\n" +
@@ -965,7 +1020,7 @@ func file_rpc_master_proto_rawDescGZIP() []byte {
 }
 
 var file_rpc_master_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_rpc_master_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_rpc_master_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_rpc_master_proto_goTypes = []any{
 	(Signal)(0),                    // 0: master.Signal
 	(TaskType)(0),                  // 1: master.TaskType
@@ -977,10 +1032,11 @@ var file_rpc_master_proto_goTypes = []any{
 	(*TaskApplyReply)(nil),         // 7: master.TaskApplyReply
 	(*MapTaskInfo)(nil),            // 8: master.MapTaskInfo
 	(*ReduceTaskInfo)(nil),         // 9: master.ReduceTaskInfo
-	(*TaskCompletionRequest)(nil),  // 10: master.TaskCompletionRequest
-	(*TaskCompletionReply)(nil),    // 11: master.TaskCompletionReply
-	(*CompletionMapAttach)(nil),    // 12: master.CompletionMapAttach
-	(*CompletionReduceAttach)(nil), // 13: master.CompletionReduceAttach
+	(*InputFormatter)(nil),         // 10: master.InputFormatter
+	(*TaskCompletionRequest)(nil),  // 11: master.TaskCompletionRequest
+	(*TaskCompletionReply)(nil),    // 12: master.TaskCompletionReply
+	(*CompletionMapAttach)(nil),    // 13: master.CompletionMapAttach
+	(*CompletionReduceAttach)(nil), // 14: master.CompletionReduceAttach
 }
 var file_rpc_master_proto_depIdxs = []int32{
 	0,  // 0: master.WorkerRegisterReply.signal:type_name -> master.Signal
@@ -989,23 +1045,24 @@ var file_rpc_master_proto_depIdxs = []int32{
 	1,  // 3: master.TaskApplyReply.task_type:type_name -> master.TaskType
 	8,  // 4: master.TaskApplyReply.map_task_info:type_name -> master.MapTaskInfo
 	9,  // 5: master.TaskApplyReply.reduce_task_info:type_name -> master.ReduceTaskInfo
-	1,  // 6: master.TaskCompletionRequest.task_type:type_name -> master.TaskType
-	12, // 7: master.TaskCompletionRequest.map_attach:type_name -> master.CompletionMapAttach
-	13, // 8: master.TaskCompletionRequest.reduce_attach:type_name -> master.CompletionReduceAttach
-	0,  // 9: master.TaskCompletionReply.signal:type_name -> master.Signal
-	2,  // 10: master.MasterService.WorkerRegister:input_type -> master.WorkerRegisterRequest
-	4,  // 11: master.MasterService.Heartbeat:input_type -> master.HeartbeatRequest
-	6,  // 12: master.MasterService.TaskApply:input_type -> master.TaskApplyRequest
-	10, // 13: master.MasterService.TaskCompletion:input_type -> master.TaskCompletionRequest
-	3,  // 14: master.MasterService.WorkerRegister:output_type -> master.WorkerRegisterReply
-	5,  // 15: master.MasterService.Heartbeat:output_type -> master.HeartbeatReply
-	7,  // 16: master.MasterService.TaskApply:output_type -> master.TaskApplyReply
-	11, // 17: master.MasterService.TaskCompletion:output_type -> master.TaskCompletionReply
-	14, // [14:18] is the sub-list for method output_type
-	10, // [10:14] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	10, // 6: master.MapTaskInfo.input_formatter:type_name -> master.InputFormatter
+	1,  // 7: master.TaskCompletionRequest.task_type:type_name -> master.TaskType
+	13, // 8: master.TaskCompletionRequest.map_attach:type_name -> master.CompletionMapAttach
+	14, // 9: master.TaskCompletionRequest.reduce_attach:type_name -> master.CompletionReduceAttach
+	0,  // 10: master.TaskCompletionReply.signal:type_name -> master.Signal
+	2,  // 11: master.MasterService.WorkerRegister:input_type -> master.WorkerRegisterRequest
+	4,  // 12: master.MasterService.Heartbeat:input_type -> master.HeartbeatRequest
+	6,  // 13: master.MasterService.TaskApply:input_type -> master.TaskApplyRequest
+	11, // 14: master.MasterService.TaskCompletion:input_type -> master.TaskCompletionRequest
+	3,  // 15: master.MasterService.WorkerRegister:output_type -> master.WorkerRegisterReply
+	5,  // 16: master.MasterService.Heartbeat:output_type -> master.HeartbeatReply
+	7,  // 17: master.MasterService.TaskApply:output_type -> master.TaskApplyReply
+	12, // 18: master.MasterService.TaskCompletion:output_type -> master.TaskCompletionReply
+	15, // [15:19] is the sub-list for method output_type
+	11, // [11:15] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_rpc_master_proto_init() }
@@ -1017,7 +1074,7 @@ func file_rpc_master_proto_init() {
 		(*TaskApplyReply_MapTaskInfo)(nil),
 		(*TaskApplyReply_ReduceTaskInfo)(nil),
 	}
-	file_rpc_master_proto_msgTypes[8].OneofWrappers = []any{
+	file_rpc_master_proto_msgTypes[9].OneofWrappers = []any{
 		(*TaskCompletionRequest_MapAttach)(nil),
 		(*TaskCompletionRequest_ReduceAttach)(nil),
 	}
@@ -1027,7 +1084,7 @@ func file_rpc_master_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rpc_master_proto_rawDesc), len(file_rpc_master_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

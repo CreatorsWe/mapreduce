@@ -2,45 +2,33 @@ package master
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	
 	pb "github.com/mapreduce_impl/rpc"
+	. "github.com/mapreduce_impl/common"
 )
 
 
 
 func (master *Master) WorkerRegister(tx context.Context, req *pb.WorkerRegisterRequest) (*pb.WorkerRegisterReply, error) {
-	master.WorkerMut.Lock()
-	workerInfo, exist := master.Workers[req.WorkerId]
-	master.WorkerMut.Unlock()
-	if exist {
-		// 检查 generation
-		if workerInfo.Generation == int(req.Generation) {
-			workerInfo.Generation++
-			log.Printf("[worker register] %s", req.WorkerId) 
-			return &pb.WorkerRegisterReply{
-				Ok: true,
-				MasterId: master.ID,
-				Generation: int32(workerInfo.Generation),
-			}, nil
-		}
-		// 世代号不同，注册失败
-		log.Printf("[worker register] worker %s register fail, because the generation is no same", req.WorkerId)
+	gen, err := master.RegisterWorker(req.WorkerId, int(req.Generation), req.Address)
+	
+	switch err.Code() {
+	case WorkerNoSameGeneration:
+		slog.Warn("worker register fail", "msg", err.String())
 		return &pb.WorkerRegisterReply{
-			Ok: false,
+			Signal: pb.Signal_SHUTDOWN,
 			MasterId: master.ID,
 			Generation: 0,
 		}, nil
-	}	
-	// 不存在，注册
-	NewWorkerInfo := NewWorkerInfo(req.WorkerId, 1, req.Address)
-	master.WorkerMut.Lock()
-	master.Workers[req.WorkerId] = &NewWorkerInfo
-	master.CurrentNumWorker++
-	master.WorkerMut.Unlock()
-	log.Printf("[worker register] %s", req.WorkerId)
-	return &pb.WorkerRegisterReply{
-		Ok: true,
-		MasterId: master.ID,
-		Generation: 1,
-	}, nil
+	case Nil:
+		slog.Info("worker register success", "worker_id", req.WorkerId, "generation", gen)
+		return &pb.WorkerRegisterReply{
+			Signal: pb.Signal_OK,
+			MasterId: master.ID,
+			Generation: int32(gen),
+		}, nil
+	default:  // 代码层面的错误，日志必须是 Fatal 或者 panic，退出程序
+		panic("unreachable case. Module: WorkerRegister")
+	}
 }

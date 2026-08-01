@@ -3,69 +3,73 @@ package master
 
 import (
 	"context"
-	"log"
-	"time"
+	"log/slog"
 	pb "github.com/mapreduce_impl/rpc"
-	"github.com/mapreduce_impl/common"
+	. "github.com/mapreduce_impl/common"
 )
 
 
 func (master *Master) TaskCompletion(ctx context.Context, req *pb.TaskCompletionRequest) (*pb.TaskCompletionReply, error) {
-	log.Printf("[task completion] worker %s complete %s task %d\n", req.WorkerId, req.TaskType, req.TaskId)
-	// 1. 获取 worker 比较 generation
-	master.WorkerMut.Lock()
-	workerInfo, exist := master.Workers[req.WorkerId]
-	master.WorkerMut.Unlock()
-	if !exist {
-		log.Printf("[task completion] worker %s do not exist\n")
-		return &pb.TaskCompletionReply{Signal: pb.Signal_REGISTER}, nil	
+	if !master.enoughWorker.Load() { 
+		return &pb.TaskCompletionReply{ Signal: pb.Signal_WAIT }, nil
 	}
-	if workerInfo.Generation != int(req.Generation) {
-		log.Printf("[task completion] worker %s has no same generation\n")
-		return &pb.TaskCompletionReply{Signal: pb.Signal_SHUTDOWN}, nil
-	}
-	// 2. 获取 task，判断其状态是否合法
+
+	err := master.CheckWorker(req.WorkerId, int(req.Generation))
+
+	if !err.IsNil() { return &pb.TaskCompletionReply{ Signal: pb.Signal_WAIT }, nil }
+
 	switch req.TaskType {
 	case pb.TaskType_MAP:
-		master.TaskMut.Lock()
-		task, exist := master.MapTasks[int(req.TaskId)]
-		master.TaskMut.Unlock()
-		if !exist {
-			log.Printf("[task completion] task %d do not exist\n", req.TaskId)
-			return &pb.TaskCompletionReply{Signal: pb.Signal_SHUTDOWN}, nil
-		}
-		// 更新 workerInfo，将 running -> completion
-		workerInfo.RunningTask = -1
-		workerInfo.CompletedTasks = append(workerInfo.CompletedTasks, int(req.TaskId))
+		// 更新 workerInfo
+		master.UpdateWorkerRunningTask(req.WorkerId, -1)
+		master.AppendWorkerComletionTask(req.WorkerId, int(req.TaskId))
+		master.UpdateWorkerStatus(req.WorkerId, WorkerStatusIdle)
 		// 更新 taskInfo
 		attach := req.Attach.(*pb.TaskCompletionRequest_MapAttach)
-		intermediateFiles := attach.MapAttach.IntermediateFiles
-		task.EndTime = time.Now()
-		task.Status = common.TaskStatusCompletion
-		task.InterMediateAddresses = intermediateFiles
+		intermediatePaths := attach.MapAttach.IntermediatePaths
+		master.UpdateMapTaskForCompletion(int(req.TaskId), req.WorkerId, intermediatePaths)
+		
+		slog.Info(
+			"complete Map task", 
+			"worker", req.WorkerId,
+			"task", req.TaskId,
+			"intermediate_paths", intermediatePaths,
+		)
 
-		if master.isMapTasksCompletion() {
+		if master.IsMapTasksCompletion() {
 			master.Phase.Store(false)
+			// 初始化 Reduce 任务
+			master.InitReduceJob()
 		}
 
-		return &pb.TaskCompletionReply{Signal: pb.Signal_OK}, nil
+		return &pb.TaskCompletionReply{ Signal: pb.Signal_OK }, nil
 	case pb.TaskType_REDUCE:
-		master.TaskMut.Lock()
-		task, exist := master.ReduceTasks[int(req.TaskId)]
-		master.TaskMut.Unlock()
-		if !exist {
-			log.Printf("[task completion] task %d do not exist\n", req.TaskId)
-			return &pb.TaskCompletionReply{ Signal: pb.Signal_SHUTDOWN}, nil
-		}
-		workerInfo.RunningTask = -1
-		workerInfo.CompletedTasks = append(workerInfo.CompletedTasks, int(req.TaskId))
+		// 更新 workerInfo
+		master.UpdateWorkerRunningTask(req.WorkerId, -1)
+		master.AppendWorkerComletionTask(req.WorkerId, int(req.TaskId))
+		master.UpdateWorkerStatus(req.WorkerId, WorkerStatusIdle)
+		// 更新 taskInfo
 		attach := req.Attach.(*pb.TaskCompletionRequest_ReduceAttach)
-		task.EndTime = time.Now()
-		task.Status = common.TaskStatusCompletion
-		task.OutputPath = attach.ReduceAttach.OutputFile
-		return &pb.TaskCompletionReply{ Signal: pb.Signal_OK}, nil
+		outputPath := attach.ReduceAttach.OutputPath
+		master.UpdateReduceTaskForCompletion(int(req.TaskId), req.WorkerId, outputPath)
+
+		slog.Info(
+			"complete Reduce task", 
+			"worker", req.WorkerId,
+			"task", req.TaskId,
+			"output_path", outputPath,
+		)
+
+		// 所有任务完成，关闭所有 worker 状态
+		if master.IsAllTaskCompletion() {
+			slog.Info("all task completed")
+			master.ShutdownAllWorker()
+			return &pb.TaskCompletionReply{ Signal: pb.Signal_SHUTDOWN }, nil
+		}
+
+		return &pb.TaskCompletionReply{ Signal: pb.Signal_OK }, nil
 	default:
-		return &pb.TaskCompletionReply{Signal: pb.Signal_SHUTDOWN}, nil
+		panic("unreachable case")
 	}
 }
 

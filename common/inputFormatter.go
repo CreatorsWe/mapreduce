@@ -6,19 +6,19 @@ import "fmt"
 type InputFormatter struct {
 	FilePath string
 	From int   // bytes.
-	To int
+	Size int
 }
 
 
-func NewInputFormatter(file_path string, from, to int) InputFormatter {
+func NewInputFormatter(file_path string, from, size int) InputFormatter {
 	return InputFormatter {
 		FilePath: file_path,
 		From: from,
-		To: to,
+		Size: size,
 	}
 }
 
 
 func (ift *InputFormatter) GetInfo() string {
-	return fmt.Sprintf("(%s, %d, %d)", ift.FilePath, ift.From, ift.To)
+	return fmt.Sprintf("(%s, %d, %d)", ift.FilePath, ift.From, ift.Size)
 }

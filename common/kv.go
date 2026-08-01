@@ -18,7 +18,7 @@ func (kv *KV) ToJSON() string {
 }
 
 func FromJSON(record string) KV {
-	re := regexp.MustCompile(`\{ (+), (+) \}`)
+	re := regexp.MustCompile(`\{ ([^,]+), ([^}]+) \}`)
 	matches := re.FindStringSubmatch(record)
 	return NewKV(matches[1], matches[2])
 }

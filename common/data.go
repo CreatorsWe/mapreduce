@@ -5,10 +5,12 @@ const MASTER_ADDRESS = "127.0.0.1:50051"
 
 // 参数
 var (
-	NumWorker int
-	NReduce int
-	InputDir string
+	WorkerCount int
+	ReduceCount int
+	BlockSize int
 	IntermediateDir string
 	OutputDir string
-	IsDebug bool
+	InputFiles []string
+	Timeout int
+	Periodic int
 )

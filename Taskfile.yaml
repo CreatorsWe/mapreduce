@@ -10,4 +10,4 @@ tasks:
 
   clean:
     cmds:
-      - rm -r rpc/*.proto.go
+      - rm -r rpc/*.pb.go

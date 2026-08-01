@@ -1,20 +1,15 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/mapreduce_impl/common"
-	"github.com/mapreduce_impl/flag"
 	"github.com/mapreduce_impl/master"
+	"github.com/mapreduce_impl/flag"
 )
 
-func init() {
-	flag.Parse()
-}
 
 
 func main() {
+	flag.Parse()
 	master := master.NewMaster(common.MASTER_ADDRESS)
-	master.JobInitialzation()
 	master.StartService()
 }
