@@ -9,13 +9,13 @@ import (
 	pb "github.com/mapreduce_impl/rpc"
 )
 
-
-
 func (worker *Worker) heartbeatService(ctx context.Context, cancel context.CancelFunc) {
-	if worker.Status == common.WorkerStatusShutdown { return }
+	if worker.Status == common.WorkerStatusShutdown {
+		return
+	}
 
-	req := pb.HeartbeatRequest {
-		WorkerId: worker.ID,
+	req := pb.HeartbeatRequest{
+		WorkerId:   worker.ID,
 		Generation: int32(worker.Generation),
 	}
 
@@ -25,7 +25,6 @@ func (worker *Worker) heartbeatService(ctx context.Context, cancel context.Cance
 		slog.Error("heartbeat", "msg", err.Error())
 		cancel()
 	}
-
 
 	switch res.Signal {
 	case pb.Signal_OK:

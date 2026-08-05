@@ -1,22 +1,23 @@
 package master
 
-
 import (
 	"context"
 	"log/slog"
-	pb "github.com/mapreduce_impl/rpc"
+
 	. "github.com/mapreduce_impl/common"
+	pb "github.com/mapreduce_impl/rpc"
 )
 
-
 func (master *Master) TaskCompletion(ctx context.Context, req *pb.TaskCompletionRequest) (*pb.TaskCompletionReply, error) {
-	if !master.enoughWorker.Load() { 
-		return &pb.TaskCompletionReply{ Signal: pb.Signal_WAIT }, nil
+	if !master.enoughWorker.Load() {
+		return &pb.TaskCompletionReply{Signal: pb.Signal_WAIT}, nil
 	}
 
 	err := master.CheckWorker(req.WorkerId, int(req.Generation))
 
-	if !err.IsNil() { return &pb.TaskCompletionReply{ Signal: pb.Signal_WAIT }, nil }
+	if !err.IsNil() {
+		return &pb.TaskCompletionReply{Signal: pb.Signal_WAIT}, nil
+	}
 
 	switch req.TaskType {
 	case pb.TaskType_MAP:
@@ -28,9 +29,9 @@ func (master *Master) TaskCompletion(ctx context.Context, req *pb.TaskCompletion
 		attach := req.Attach.(*pb.TaskCompletionRequest_MapAttach)
 		intermediatePaths := attach.MapAttach.IntermediatePaths
 		master.UpdateMapTaskForCompletion(int(req.TaskId), req.WorkerId, intermediatePaths)
-		
+
 		slog.Info(
-			"complete Map task", 
+			"complete Map task",
 			"worker", req.WorkerId,
 			"task", req.TaskId,
 			"intermediate_paths", intermediatePaths,
@@ -42,7 +43,7 @@ func (master *Master) TaskCompletion(ctx context.Context, req *pb.TaskCompletion
 			master.InitReduceJob()
 		}
 
-		return &pb.TaskCompletionReply{ Signal: pb.Signal_OK }, nil
+		return &pb.TaskCompletionReply{Signal: pb.Signal_OK}, nil
 	case pb.TaskType_REDUCE:
 		// 更新 workerInfo
 		master.UpdateWorkerRunningTask(req.WorkerId, -1)
@@ -54,7 +55,7 @@ func (master *Master) TaskCompletion(ctx context.Context, req *pb.TaskCompletion
 		master.UpdateReduceTaskForCompletion(int(req.TaskId), req.WorkerId, outputPath)
 
 		slog.Info(
-			"complete Reduce task", 
+			"complete Reduce task",
 			"worker", req.WorkerId,
 			"task", req.TaskId,
 			"output_path", outputPath,
@@ -64,12 +65,11 @@ func (master *Master) TaskCompletion(ctx context.Context, req *pb.TaskCompletion
 		if master.IsAllTaskCompletion() {
 			slog.Info("all task completed")
 			master.ShutdownAllWorker()
-			return &pb.TaskCompletionReply{ Signal: pb.Signal_SHUTDOWN }, nil
+			return &pb.TaskCompletionReply{Signal: pb.Signal_SHUTDOWN}, nil
 		}
 
-		return &pb.TaskCompletionReply{ Signal: pb.Signal_OK }, nil
+		return &pb.TaskCompletionReply{Signal: pb.Signal_OK}, nil
 	default:
 		panic("unreachable case")
 	}
 }
-

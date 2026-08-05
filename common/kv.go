@@ -23,7 +23,6 @@ func FromJSON(record string) KV {
 	return NewKV(matches[1], matches[2])
 }
 
-
 func NewKV(k, v string) KV {
 	return KV{
 		Key:   k,

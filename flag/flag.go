@@ -6,7 +6,6 @@ import (
 	"github.com/mapreduce_impl/common"
 )
 
-
 func init() {
 	flag.IntVar(&common.WorkerCount, "w", 0, "the number of worker")
 	flag.IntVar(&common.ReduceCount, "r", 0, "the number of Reduce task")
@@ -22,8 +21,9 @@ func Parse() {
 
 	inputFiles := flag.Args()
 
-	if inputFiles == nil { panic("need input files") }
+	if inputFiles == nil {
+		panic("need input files")
+	}
 
 	common.InputFiles = inputFiles
 }
-

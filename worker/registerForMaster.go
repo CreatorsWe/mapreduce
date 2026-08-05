@@ -9,18 +9,15 @@ import (
 	pb "github.com/mapreduce_impl/rpc"
 )
 
-
-
-
 func (worker *Worker) registerWorkerService(ctx context.Context, cancel context.CancelFunc) bool {
-	if worker.Status == common.WorkerStatusShutdown { 
+	if worker.Status == common.WorkerStatusShutdown {
 		cancel()
-		return false 
+		return false
 	}
-	
+
 	req := pb.WorkerRegisterRequest{
-		WorkerId:    worker.ID,
-		Address: worker.Address,
+		WorkerId:   worker.ID,
+		Address:    worker.Address,
 		Generation: int32(worker.Generation),
 	}
 
@@ -47,8 +44,3 @@ func (worker *Worker) registerWorkerService(ctx context.Context, cancel context.
 	}
 	return false
 }
-
-
-
-
-

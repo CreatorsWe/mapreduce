@@ -8,31 +8,30 @@ import (
 
 type WorkerInfo struct {
 	// 标识&地址
-	ID string
+	ID         string
 	Generation int
-	Address  string // ip:port
+	Address    string // ip:port
 
 	// 状态&存活
 	Status   common.WorkerStatus
 	LastPing time.Time // 超时检测
 
 	// 执行的任务
-	RunningTask   int
+	RunningTask    int
 	CompletedTasks []int // 已完成的任务列表，如果该机器故障，Master 将重新分配所有已执行的任务
 }
 
 func NewWorkerInfo(id string, address string) WorkerInfo {
 	return WorkerInfo{
-		ID:       id,
-		Generation: 1,
+		ID:             id,
+		Generation:     1,
 		Address:        address,
 		Status:         common.WorkerStatusIdle,
 		LastPing:       time.Time{},
-		RunningTask:   -1,
+		RunningTask:    -1,
 		CompletedTasks: nil,
 	}
 }
-
 
 func (wi *WorkerInfo) Reset() {
 	wi.Generation++

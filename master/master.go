@@ -1,36 +1,35 @@
 package master
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 	"sync/atomic"
-	"net"
-	"context"
 	"time"
-	"fmt"
 
 	"github.com/google/uuid"
 	. "github.com/mapreduce_impl/common"
 	pb "github.com/mapreduce_impl/rpc"
-	"google.golang.org/grpc" 
+	"google.golang.org/grpc"
 )
 
 /*
 go 无法获取 map 值的引用，所以涉及到修改值数据的场景必须存储指针类型。
 */
 type Master struct {
-	ID string
+	ID      string
 	Address string
 
+	MapTaskCount                int          // 一旦初始化，只读
+	ReduceTaskCount             int          // 一旦初始化，只读
+	TotalWorkerCount            int          // 只读
+	CurrentAvailableWorkerCount atomic.Int32 // 注册/失联时动态改变
 
-	MapTaskCount int     // 一旦初始化，只读
-	ReduceTaskCount int  // 一旦初始化，只读
-	TotalWorkerCount int // 只读
-	CurrentAvailableWorkerCount atomic.Int32  // 注册/失联时动态改变
-	
-	InputFiles []string
+	InputFiles      []string
 	IntermediateDir string
-	OutputDir string
+	OutputDir       string
 
 	BlockSize int
 
@@ -43,29 +42,27 @@ type Master struct {
 
 	// Map task output files
 	PartitionMaps map[int][]string
-	
-	Phase atomic.Bool  // true 表示 MAP；false 表示 REDUCE
+
+	Phase atomic.Bool // true 表示 MAP；false 表示 REDUCE
 
 	// 超时检测
-	Timeout time.Duration
+	Timeout  time.Duration
 	Periodic time.Duration
 
-	TaskRecord int   // 仅用于得到唯一的任务编号
-	WorkerMut sync.RWMutex
-	TaskMut sync.RWMutex
+	TaskRecord int // 仅用于得到唯一的任务编号
+	WorkerMut  sync.RWMutex
+	TaskMut    sync.RWMutex
 
 	// 是否获取足够的 workerNum
 	enoughWorker atomic.Bool
 	pb.UnimplementedMasterServiceServer
 }
 
-
-
 // 周期检测
 func (master *Master) CheckTimeOutPeriodically(ctx context.Context) {
 	for {
 		select {
-		case <- ctx.Done():
+		case <-ctx.Done():
 			slog.Debug("exit periodic time-out check")
 			return
 		default:
@@ -76,8 +73,8 @@ func (master *Master) CheckTimeOutPeriodically(ctx context.Context) {
 
 			for _, worker := range master.Workers {
 				if current.Sub(worker.LastPing) > master.Timeout {
-					worker.Status = WorkerStatusDead   // 外部获取锁，这里不能调用 UpdateWorkerStatus，因为其内部也需要获取锁
-				}	
+					worker.Status = WorkerStatusDead // 外部获取锁，这里不能调用 UpdateWorkerStatus，因为其内部也需要获取锁
+				}
 			}
 
 			time.Sleep(master.Periodic)
@@ -85,12 +82,12 @@ func (master *Master) CheckTimeOutPeriodically(ctx context.Context) {
 	}
 }
 
-
-
 func (master *Master) RegisterWorker(id string, generation int, address string) (int, MasterError) {
 	exist, err := master.existWorker(id, generation)
 
-	if !err.IsNil() { return -1, err }
+	if !err.IsNil() {
+		return -1, err
+	}
 
 	// 当前 worker 数量 + 1
 	master.CurrentAvailableWorkerCount.Add(1)
@@ -111,28 +108,30 @@ func (master *Master) RegisterWorker(id string, generation int, address string) 
 	}
 }
 
-
-
-
 func (master *Master) CheckWorker(id string, generation int) MasterError {
 	master.WorkerMut.RLock()
 	defer master.WorkerMut.RUnlock()
 
 	workerInfo, exist := master.Workers[id]
 
-	if !exist { return NewMasterError(WorkerNotExist, "worker %s do not eixst", id) } 
+	if !exist {
+		return NewMasterError(WorkerNotExist, "worker %s do not eixst", id)
+	}
 
-	if workerInfo.Generation != generation { return NewMasterError(WorkerNoSameGeneration, "worker %s has no same generation", id) }
+	if workerInfo.Generation != generation {
+		return NewMasterError(WorkerNoSameGeneration, "worker %s has no same generation", id)
+	}
 
 	// 检查 Status 是否为 Dead 或 Shutdown
-	if workerInfo.Status ==	WorkerStatusDead { return NewMasterError(WorkerDead, "worker %s is dead", id)}
-	if workerInfo.Status == WorkerStatusShutdown { return NewMasterError(WorkerShutdown, "worker %s shutdown", id)}
+	if workerInfo.Status == WorkerStatusDead {
+		return NewMasterError(WorkerDead, "worker %s is dead", id)
+	}
+	if workerInfo.Status == WorkerStatusShutdown {
+		return NewMasterError(WorkerShutdown, "worker %s shutdown", id)
+	}
 
 	return NewMasterNilError()
 }
-
-
-
 
 func (master *Master) UpdateWorkerLastPing(id string, last_ping time.Time) {
 	master.WorkerMut.Lock()
@@ -140,16 +139,11 @@ func (master *Master) UpdateWorkerLastPing(id string, last_ping time.Time) {
 	master.Workers[id].LastPing = last_ping
 }
 
-
-
-
 func (master *Master) UpdateWorkerStatus(id string, status WorkerStatus) {
 	master.WorkerMut.Lock()
 	defer master.WorkerMut.Unlock()
 	master.Workers[id].Status = status
 }
-
-
 
 // 不检查 worker 是否合法，调用前必须进行 CheckWorker 检查
 func (master *Master) UpdateWorkerRunningTask(id string, running_task_id int) {
@@ -158,17 +152,11 @@ func (master *Master) UpdateWorkerRunningTask(id string, running_task_id int) {
 	master.Workers[id].RunningTask = running_task_id
 }
 
-
-
-
 func (master *Master) AppendWorkerComletionTask(id string, completed_task_id int) {
 	master.WorkerMut.Lock()
 	defer master.WorkerMut.Unlock()
 	master.Workers[id].CompletedTasks = append(master.Workers[id].CompletedTasks, completed_task_id)
 }
-
-
-
 
 func (master *Master) GetWorkerStatus(id string) WorkerStatus {
 	master.WorkerMut.RLock()
@@ -177,18 +165,12 @@ func (master *Master) GetWorkerStatus(id string) WorkerStatus {
 	return status
 }
 
-
-
-
 func (master *Master) GetWorkerLastPing(id string) time.Time {
 	master.WorkerMut.RLock()
 	defer master.WorkerMut.RUnlock()
 	lastPing := master.Workers[id].LastPing
 	return lastPing
 }
-
-
-
 
 func (master *Master) GetWorkerRunningTask(id string) int {
 	master.WorkerMut.RLock()
@@ -197,18 +179,12 @@ func (master *Master) GetWorkerRunningTask(id string) int {
 	return runningTask
 }
 
-
-
-
 func (master *Master) GetWorkerCompledTasks(id string) []int {
 	master.WorkerMut.RLock()
 	defer master.WorkerMut.RUnlock()
 	completedTasks := master.Workers[id].CompletedTasks
 	return completedTasks
 }
-
-
-
 
 // Task 处理函数
 func (master *Master) GetIdleMapTaskId() (int, bool) {
@@ -224,24 +200,20 @@ func (master *Master) GetIdleMapTaskId() (int, bool) {
 	return -1, false
 }
 
-
-
-
 func (master *Master) UpdateMapTaskForDivice(task_id int, worker_id string) {
 	master.TaskMut.Lock()
 	defer master.TaskMut.Unlock()
 
 	task, exist := master.MapTasks[task_id]
 
-	if !exist { panic("It must be a existed task's id") }
+	if !exist {
+		panic("It must be a existed task's id")
+	}
 
 	task.WorkerId = worker_id
 	task.Status = TaskStatusRunning
 	task.StartTime = time.Now()
 }
-
-
-
 
 func (master *Master) UpdateMapTaskForCompletion(task_id int, worker_id string, intermediate_paths []string) {
 	master.TaskMut.Lock()
@@ -249,17 +221,18 @@ func (master *Master) UpdateMapTaskForCompletion(task_id int, worker_id string, 
 
 	task, exist := master.MapTasks[task_id]
 
-	if !exist { panic("It must be a existed task's id") }
+	if !exist {
+		panic("It must be a existed task's id")
+	}
 
-	if worker_id != task.WorkerId { panic("the worker id that the MapTasks record is not equal to the requesting worker id") } 
+	if worker_id != task.WorkerId {
+		panic("the worker id that the MapTasks record is not equal to the requesting worker id")
+	}
 
 	task.Status = TaskStatusCompletion
 	task.EndTime = time.Now()
 	task.IntermediatePaths = intermediate_paths
 }
-
-
-
 
 func (master *Master) GetPbMapTaskInfoForDivice(task_id int) *pb.MapTaskInfo {
 	master.TaskMut.RLock()
@@ -267,25 +240,24 @@ func (master *Master) GetPbMapTaskInfoForDivice(task_id int) *pb.MapTaskInfo {
 
 	taskInfo, exist := master.MapTasks[task_id]
 
-	if !exist { panic("It must be a existed task's id") }
+	if !exist {
+		panic("It must be a existed task's id")
+	}
 
-	pbInputFormatter := pb.InputFormatter {
+	pbInputFormatter := pb.InputFormatter{
 		InputPath: taskInfo.MapTaskFormatter.FilePath,
-		From: int32(taskInfo.MapTaskFormatter.From),
-		To: int32(taskInfo.MapTaskFormatter.Size),
+		From:      int32(taskInfo.MapTaskFormatter.From),
+		To:        int32(taskInfo.MapTaskFormatter.Size),
 	}
 
 	pbMapTaskInfo := pb.MapTaskInfo{
-		InputFormatter: &pbInputFormatter,
-		PartitionCount: int32(taskInfo.MapTaskFormatter.PartitionCount),
+		InputFormatter:  &pbInputFormatter,
+		PartitionCount:  int32(taskInfo.MapTaskFormatter.PartitionCount),
 		IntermediateDir: taskInfo.MapTaskFormatter.IntermediateDir,
 	}
 
 	return &pbMapTaskInfo
 }
-
-
-
 
 func (master *Master) GetPbReduceTaskInfoForDivice(task_id int) *pb.ReduceTaskInfo {
 	master.TaskMut.RLock()
@@ -293,19 +265,18 @@ func (master *Master) GetPbReduceTaskInfoForDivice(task_id int) *pb.ReduceTaskIn
 
 	taskInfo, exist := master.ReduceTasks[task_id]
 
-	if !exist { panic("It must be a existed task's id") }
+	if !exist {
+		panic("It must be a existed task's id")
+	}
 
-	pbReduceTaskInfo := pb.ReduceTaskInfo {
+	pbReduceTaskInfo := pb.ReduceTaskInfo{
 		PartitionIndex: int32(taskInfo.ReduceTaskFormatter.PartitionIndex),
 		PartitionPaths: taskInfo.ReduceTaskFormatter.IntermediatePaths,
-		OutputDir: master.OutputDir,
+		OutputDir:      master.OutputDir,
 	}
 
 	return &pbReduceTaskInfo
 }
-
-
-
 
 func (master *Master) GetIdleReduceTaskId() (int, bool) {
 	master.TaskMut.RLock()
@@ -320,25 +291,20 @@ func (master *Master) GetIdleReduceTaskId() (int, bool) {
 	return -1, false
 }
 
-
-
-
-
 func (master *Master) UpdateReduceTaskForDivice(task_id int, worker_id string) {
 	master.TaskMut.Lock()
 	defer master.TaskMut.Unlock()
 
 	task, exist := master.ReduceTasks[task_id]
 
-	if !exist { panic("It must be a existed task's id") }
+	if !exist {
+		panic("It must be a existed task's id")
+	}
 
 	task.WorkerId = worker_id
 	task.Status = TaskStatusRunning
 	task.StartTime = time.Now()
 }
-
-
-
 
 func (master *Master) UpdateReduceTaskForCompletion(task_id int, worker_id string, output_path string) {
 	master.TaskMut.Lock()
@@ -346,17 +312,18 @@ func (master *Master) UpdateReduceTaskForCompletion(task_id int, worker_id strin
 
 	task, exist := master.ReduceTasks[task_id]
 
-	if !exist { panic("It must be a existed tasks's id") }
+	if !exist {
+		panic("It must be a existed tasks's id")
+	}
 
-	if worker_id != task.WorkerId { panic("the worker id that the ReduceTasks record is not equal to the requesting worker id") }
+	if worker_id != task.WorkerId {
+		panic("the worker id that the ReduceTasks record is not equal to the requesting worker id")
+	}
 
 	task.Status = TaskStatusCompletion
 	task.EndTime = time.Now()
 	task.OutputPath = output_path
 }
-
-
-
 
 // 重置 worker 已执行的所有 task 的状态
 func (master *Master) ResetTasksOfWorker(worker_id string) {
@@ -367,9 +334,13 @@ func (master *Master) ResetTasksOfWorker(worker_id string) {
 
 		worker, exist := master.Workers[worker_id]
 
-		if !exist { panic("It must be a existing worker") }
+		if !exist {
+			panic("It must be a existing worker")
+		}
 
-		if worker.CompletedTasks == nil && worker.RunningTask == -1 { return }
+		if worker.CompletedTasks == nil && worker.RunningTask == -1 {
+			return
+		}
 
 		taskIds = append(taskIds, worker.CompletedTasks...)
 		taskIds = append(taskIds, worker.RunningTask)
@@ -379,17 +350,19 @@ func (master *Master) ResetTasksOfWorker(worker_id string) {
 	defer master.TaskMut.Unlock()
 	for _, taskId := range taskIds {
 		mapTaskInfo, exist := master.MapTasks[taskId]
-		if !exist { goto rt }
+		if !exist {
+			goto rt
+		}
 		mapTaskInfo.Reset()
 		continue
-		rt:
+	rt:
 		reduceTaskInfo, exist := master.ReduceTasks[taskId]
-		if !exist { panic(fmt.Sprintf("task %d do not exist", taskId)) }
+		if !exist {
+			panic(fmt.Sprintf("task %d do not exist", taskId))
+		}
 		reduceTaskInfo.Reset()
 	}
 }
-
-
 
 // 关闭所有 worker
 func (master *Master) ShutdownAllWorker() {
@@ -404,22 +377,19 @@ func (master *Master) ShutdownAllWorker() {
 // 初始化固定信息
 func NewMaster(address string) Master {
 	return Master{
-		ID:                      uuid.NewString(),
-		Address:                   address,
-		Workers: make(map[string]*WorkerInfo),
-		MapTasks: make(map[int]*MapTaskInfo),
-		ReduceTasks: make(map[int]*ReduceTaskInfo),
+		ID:            uuid.NewString(),
+		Address:       address,
+		Workers:       make(map[string]*WorkerInfo),
+		MapTasks:      make(map[int]*MapTaskInfo),
+		ReduceTasks:   make(map[int]*ReduceTaskInfo),
 		PartitionMaps: make(map[int][]string),
-		Timeout: time.Duration(Timeout) * time.Second,
-		Periodic: time.Duration(Periodic) * time.Second,
+		Timeout:       time.Duration(Timeout) * time.Second,
+		Periodic:      time.Duration(Periodic) * time.Second,
 	}
 }
 
-
-
-
 // 启动 Master 服务
-func (master *Master) StartService(){
+func (master *Master) StartService() {
 	// 如果 grpc 服务启动失败, 关闭 waitEnoughWorker
 	serviceCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -430,8 +400,8 @@ func (master *Master) StartService(){
 	var wg sync.WaitGroup
 
 	// gorouinte 等待足够的 worker
-	wg.Go(func() { 
-		master.waitEnoughWorker(serviceCtx) 
+	wg.Go(func() {
+		master.waitEnoughWorker(serviceCtx)
 
 		time.Sleep(5 * time.Second)
 
@@ -441,17 +411,12 @@ func (master *Master) StartService(){
 	// 主线程 grpc 服务阻塞监听 50051 端口
 	err := master.rpcServiceCall(serviceCtx)
 
-	if !err.IsNil() { 
+	if !err.IsNil() {
 		panic(err.String())
 	}
 
 	wg.Wait()
 }
-
-
-
-
-
 
 // 初始化作用信息
 func (master *Master) jobInitialzation() {
@@ -469,18 +434,19 @@ func (master *Master) jobInitialzation() {
 	master.initMapJob()
 }
 
-
 func (master *Master) initMapJob() {
 	slog.Info("Init Map job")
 
-	inputFormatters, err := DivideToInputFormatters(master.InputFiles, master.BlockSize)	
+	inputFormatters, err := DivideToInputFormatters(master.InputFiles, master.BlockSize)
 
-	if err != nil { panic(err.Error()) }
+	if err != nil {
+		panic(err.Error())
+	}
 
 	master.MapTaskCount = len(inputFormatters)
 
 	// 初始化所有 Map 任务
-	for _ , inputFormatter := range inputFormatters {
+	for _, inputFormatter := range inputFormatters {
 		mapTaskFormat := NewMaptaskFormatter(inputFormatter, master.IntermediateDir, master.ReduceTaskCount)
 		mapTaskInfo := NewMapTaskInfo(master.TaskRecord, mapTaskFormat)
 		master.MapTasks[master.TaskRecord] = &mapTaskInfo
@@ -490,9 +456,10 @@ func (master *Master) initMapJob() {
 	}
 }
 
-
 func (master *Master) InitReduceJob() {
-	if master.Phase.Load() { panic("Trying to initialze the Reduce tasks when the Phase is true") }
+	if master.Phase.Load() {
+		panic("Trying to initialze the Reduce tasks when the Phase is true")
+	}
 
 	slog.Info("Init Reduce job")
 
@@ -504,7 +471,9 @@ func (master *Master) InitReduceJob() {
 	for i := range master.ReduceTaskCount {
 		partitionFiles, exist := master.PartitionMaps[i]
 
-		if !exist { panic(fmt.Sprintf("There is no intermediate files in partition %d", i)) }
+		if !exist {
+			panic(fmt.Sprintf("There is no intermediate files in partition %d", i))
+		}
 
 		reduceTaskFormat := NewReduceTaskFormatter(i, partitionFiles, master.OutputDir)
 		reduceTaskInfo := NewReduceTaskInfo(master.TaskRecord, reduceTaskFormat)
@@ -515,11 +484,10 @@ func (master *Master) InitReduceJob() {
 	}
 }
 
-
-
-
 func (master *Master) initPartitionMaps() {
-	if master.Phase.Load() { panic("Trying to initialze the PartitonMaps when the Phase is true") }
+	if master.Phase.Load() {
+		panic("Trying to initialze the PartitonMaps when the Phase is true")
+	}
 
 	master.TaskMut.Lock()
 	defer master.TaskMut.Unlock()
@@ -531,26 +499,24 @@ func (master *Master) initPartitionMaps() {
 	}
 }
 
-
 func (master *Master) waitEnoughWorker(ctx context.Context) {
 	slog.Debug("Waiting for enough workers", "worker count", master.TotalWorkerCount)
 
-	loop: 
+loop:
 	for {
 		select {
-		case <- ctx.Done():
+		case <-ctx.Done():
 			slog.Warn("The service of waiting enough workers is normally interrupted")
 		default:
 			if master.CurrentAvailableWorkerCount.Load() >= int32(master.TotalWorkerCount) {
 				master.enoughWorker.Store(true)
-				break loop  // break 可以退出 select， 即使 select 并不是循环
+				break loop // break 可以退出 select， 即使 select 并不是循环
 			}
 		}
 	}
 
 	slog.Info("All workers is ready")
 }
-
 
 func (master *Master) rpcServiceCall(ctx context.Context) MasterError {
 	// 1. 创建 gRPC 实例
@@ -570,18 +536,18 @@ func (master *Master) rpcServiceCall(ctx context.Context) MasterError {
 	goroutineCtx, goroutineCancel := context.WithCancel(context.Background())
 	defer goroutineCancel()
 
-	slog.Info("grpc service listen 50051 port")	
+	slog.Info("grpc service listen 50051 port")
 
 	go func() {
 		select {
-			case <- ctx.Done(): // 传入的 ctx 终止整个监听服务
+		case <-ctx.Done(): // 传入的 ctx 终止整个监听服务
 			listen.Close()
-			case <- goroutineCtx.Done(): // 里面创建的 ctx 应对 Serve 创建失败 goroutine 仍运行的问题
+		case <-goroutineCtx.Done(): // 里面创建的 ctx 应对 Serve 创建失败 goroutine 仍运行的问题
 			return
 		}
 	}()
 
-	err = grpcServer.Serve(listen)  // 内部调用 Accept() 阻塞代码
+	err = grpcServer.Serve(listen) // 内部调用 Accept() 阻塞代码
 
 	if err != nil {
 		if err == grpc.ErrServerStopped { // 正常退出
@@ -594,16 +560,19 @@ func (master *Master) rpcServiceCall(ctx context.Context) MasterError {
 	return NewMasterNilError()
 }
 
-
 func (master *Master) existWorker(id string, generation int) (bool, MasterError) {
 	master.WorkerMut.RLock()
 	defer master.WorkerMut.RUnlock()
 
 	workerInfo, exist := master.Workers[id]
 
-	if !exist { return false, NewMasterNilError() } 
+	if !exist {
+		return false, NewMasterNilError()
+	}
 
-	if workerInfo.Generation != generation { return false, NewMasterError(WorkerNoSameGeneration, "worker %s has no same generation", id) }
+	if workerInfo.Generation != generation {
+		return false, NewMasterError(WorkerNoSameGeneration, "worker %s has no same generation", id)
+	}
 
 	return true, NewMasterNilError()
 }
